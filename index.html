@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>だまし絵マスター - お絵かき推理ゲーム</title>
+    <style>
+        /* =========================================
+           CSS: ポップでゲームらしいUIデザイン
+        ========================================= */
+        :root {
+            --primary: #FF6B6B;
+            --secondary: #4ECDC4;
+            --accent: #FFE66D;
+            --dark: #2C3E50;
+            --light: #F7FFF7;
+            --bg: #E8F8F5;
+        }
+
+        body {
+            font-family: 'Hiragino Maru Gothic ProN', 'Rounded M+ 1c', 'Meiryo', sans-serif;
+            background-color: var(--bg);
+            color: var(--dark);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 600px;
+            background: var(--light);
+            min-height: 100vh;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 画面切り替え用のクラス */
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 20px;
+            flex-grow: 1;
+            animation: fadeIn 0.4s ease-out;
+            box-sizing: border-box;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* タイトルとテキスト */
+        h1 {
+            color: var(--primary);
+            font-size: 2.5em;
+            text-align: center;
+            text-shadow: 2px 2px 0px var(--accent);
+            margin-bottom: 10px;
+            line-height: 1.2;
+        }
+        h2 {
+            color: var(--secondary);
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        p {
+            font-size: 1.1em;
+            line-height: 1.6;
+            text-align: center;
+        }
+        .warning-text {
+            color: #E74C3C;
+            font-weight: bold;
+            font-size: 1.2em;
+            background: #FDEDEC;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 2px solid #E74C3C;
+        }
+
+        /* ボタン */
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.1s;
+            box-shadow: 0 6px 0 #C0392B;
+            margin: 15px 5px;
+            font-family: inherit;
+        }
+        button:hover {
+            transform: translateY(2px);
+            box-shadow: 0 4px 0 #C0392B;
+        }
+        button:active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 #C0392B;
+        }
+        button.secondary {
+            background-color: var(--secondary);
+            box-shadow: 0 6px 0 #16A085;
+        }
+        button.secondary:hover { box-shadow: 0 4px 0 #16A085; }
+        button.secondary:active { box-shadow: 0 0 0 #16A085; }
+
+        /* 入力フォーム */
+        .player-inputs {
+            width: 100%;
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1em;
+            border: 3px solid #ddd;
+            border-radius: 10px;
+            box-sizing: border-box;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--secondary);
+        }
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        /* キャンバス周り */
+        .canvas-container {
+            width: 100%;
+            background: white;
+            border: 4px solid var(--dark);
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            touch-action: none; /* スマホでのスクロール防止 */
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 4 / 3;
+            cursor: crosshair;
+        }
+        .tools {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+            width: 100%;
+        }
+        .color-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid #ddd;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .color-btn.selected {
+            border-color: var(--dark);
+            transform: scale(1.1);
+        }
+        .tool-btn {
+            padding: 8px 15px;
+            font-size: 1em;
+            margin: 0;
+            border-radius: 15px;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+        }
+
+        /* ステータスバー（ヘッダー） */
+        .status-bar {
+            width: 100%;
+            background: var(--dark);
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            box-sizing: border-box;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .timer {
+            font-size: 1.5em;
+            color: var(--accent);
+        }
+        .timer.danger {
+            color: var(--primary);
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* スコアボード */
+        .score-board {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .score-board th, .score-board td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #ddd;
+        }
+        .score-board th {
+            background: var(--secondary);
+            color: white;
+        }
+        .score-board tr:last-child td {
+            border-bottom: none;
+        }
+        .score-board .rank-1 {
+            background: #FFF9C4;
+            font-weight: bold;
+            color: #F39C12;
+        }
+
+        /* お題表示 */
+        .prompt-display {
+            font-size: 3em;
+            font-weight: bold;
+            color: var(--dark);
+            background: var(--accent);
+            padding: 20px 40px;
+            border-radius: 20px;
+            margin: 20px 0;
+            border: 4px dashed var(--dark);
+            letter-spacing: 5px;
+        }
+
+        /* 回答一覧 */
+        .guess-list {
+            width: 100%;
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .guess-list li {
+            background: #f1f1f1;
+            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.1em;
+            border-left: 6px solid #ccc;
+        }
+        .guess-list li.correct {
+            border-left-color: var(--secondary);
+            background: #E8F8F5;
+        }
+        .guess-list li.incorrect {
+            border-left-color: var(--primary);
+            background: #FDEDEC;
+        }
+        
+        /* 表示用画像 */
+        .result-image {
+            width: 100%;
+            max-width: 400px;
+            border: 4px solid var(--dark);
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    
+    <div id="screen-title" class="screen active">
+        <h1>だまし絵<br>マスター</h1>
+        <p>「伝わりそうで伝わらない」<br>絶妙な絵を描いて高得点を狙え！</p>
+        
+        <div class="controls-row">
+            <label for="player-count">プレイヤー人数:</label>
+            <input type="number" id="player-count" min="2" max="8" value="3" style="width: 80px;">
+        </div>
+        
+        <div id="player-names-container" class="player-inputs">
+            </div>
+
+        <button onclick="startGame()">ゲームをはじめる！</button>
+        
+        <div style="margin-top: 30px; background:#f9f9f9; padding:15px; border-radius:10px; text-align:left; font-size:0.9em;">
+            <strong>【ルール】</strong><br>
+            ・描き手は<b>「全員には伝わらないが、誰か1人・2人には伝わる」</b>絵を描くと高得点！<br>
+            ・全員に正解されると「簡単すぎ」で低得点。<br>
+            ・誰も正解できないと「意味不明」でペナルティ。<br>
+            ・回答者は正解すれば得点ゲット！
+        </div>
+    </div>
+
+    <div id="screen-pass-drawer" class="screen">
+        <h2>ラウンド <span id="display-round-num">1</span></h2>
+        <p>次の描き手は...</p>
+        <h1 id="drawer-name" style="font-size: 3em;">プレイヤー名</h1>
+        <p>です！端末を渡してください。</p>
+        <p class="warning-text">※他の人は絶対に見ないでください！※</p>
+        <button onclick="showPrompt()">自分だけが見ています（お題を見る）</button>
+    </div>
+
+    <div id="screen-prompt" class="screen">
+        <h2>今回のお題は...</h2>
+        <div class="prompt-display" id="secret-prompt">ねこ</div>
+        <p>「全員に正解されない」けど「誰かは正解できる」<br>絶妙な絵を目指して描いてください！</p>
+        <button onclick="startDrawing()">お絵かきスタート</button>
+    </div>
+
+    <div id="screen-drawing" class="screen" style="padding: 0;">
+        <div class="status-bar">
+            <div><span id="drawing-player-name">名前</span> の番</div>
+            <div class="timer" id="drawing-timer">60</div>
+        </div>
+        <div style="padding: 10px 20px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center;">
+            <p style="margin: 5px 0;">お題：<strong style="color:var(--primary); font-size:1.2em;" id="drawing-prompt-reminder">ねこ</strong></p>
+            
+            <div class="canvas-container">
+                <canvas id="drawing-canvas" width="800" height="600"></canvas>
+            </div>
+            
+            <div class="tools">
+                <div class="color-btn selected" style="background: #000000;" onclick="setColor('#000000', this)"></div>
+                <div class="color-btn" style="background: #FF0000;" onclick="setColor('#FF0000', this)"></div>
+                <div class="color-btn" style="background: #0000FF;" onclick="setColor('#0000FF', this)"></div>
+                <div class="color-btn" style="background: #00FF00;" onclick="setColor('#00FF00', this)"></div>
+                <div class="color-btn" style="background: #FFCC00;" onclick="setColor('#FFCC00', this)"></div>
+                <button class="tool-btn secondary" onclick="setEraser()">消しゴム</button>
+                <button class="tool-btn secondary" onclick="clearCanvas()">全消し</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; width:100%; max-width:300px;">
+                <label>太さ:</label>
+                <input type="range" id="line-width" min="1" max="50" value="5" style="flex-grow:1;">
+            </div>
+            
+            <button onclick="finishDrawing()" style="margin-top:20px;">描き終わった！</button>
+        </div>
+    </div>
+
+    <div id="screen-pass-guesser" class="screen">
+        <h2>お絵かき終了！</h2>
+        <p>次は回答フェーズです。</p>
+        <p>端末を <strong><span id="guesser-name-pass" style="color:var(--primary); font-size:1.5em;">名前</span></strong> さんに渡してください。</p>
+        <p class="warning-text">※他の人の回答は見ないように！</p>
+        <button onclick="startGuessing()">受け取りました</button>
+    </div>
+
+    <div id="screen-guessing" class="screen">
+        <h2><span id="guesser-name-active">名前</span> さんの回答</h2>
+        <p>この絵は何を描いたものでしょうか？</p>
+        <img id="guess-image-display" class="result-image" src="" alt="描かれた絵">
+        <input type="text" id="guess-input" placeholder="ひらがな・カタカナ・漢字なんでもOK" autocomplete="off">
+        <button onclick="submitGuess()">回答する！</button>
+    </div>
+
+    <div id="screen-round-result" class="screen">
+        <h2>ラウンド結果発表！</h2>
+        <p>お題は <strong>「<span id="result-prompt" style="color:var(--primary); font-size:1.5em;">ねこ</span>」</strong> でした！</p>
+        <img id="result-image-display" class="result-image" src="" alt="描かれた絵">
+        
+        <ul class="guess-list" id="round-guess-list">
+            </ul>
+
+        <div style="background: #FFF9C4; padding: 15px; border-radius: 10px; width: 100%; margin-bottom: 20px;">
+            <h3 style="margin-top:0;">獲得ポイント</h3>
+            <p id="drawer-points-text" style="font-weight:bold; font-size:1.2em;"></p>
+        </div>
+
+        <button onclick="nextRoundCheck()">次へ</button>
+    </div>
+
+    <div id="screen-final-result" class="screen">
+        <h1>最終結果発表!!</h1>
+        <table class="score-board" id="final-score-board">
+            <thead>
+                <tr>
+                    <th>順位</th>
+                    <th>プレイヤー</th>
+                    <th>スコア</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+        
+        <div id="winner-announcement" style="font-size: 1.5em; font-weight: bold; color: var(--primary); margin: 20px 0; animation: pulse 1s infinite;">
+            優勝は 〇〇 さん！
+        </div>
+
+        <button onclick="resetGame()">もう一回遊ぶ</button>
+    </div>
+
+</div>
+
+<script>
+    /* =========================================
+       JavaScript: ゲームロジックと状態管理
+    ========================================= */
+
+    // --- お題リスト（30個以上、難易度ミックス） ---
+    const PROMPT_LIST = [
+        "ねこ", "かさ", "ピザ", "観覧車", "ロボット", "カエル", "宇宙船", "プリン", "消防車", "忍者",
+        "りんご", "飛行機", "スマートフォン", "自転車", "おばけ", "ひまわり", "ケーキ", "めがね", "ペンギン", "おにぎり",
+        "カメラ", "テレビ", "スイカ", "ライオン", "ギター", "時計", "恐竜", "信号機", "ハンバーガー", "うさぎ",
+        "ヘリコプター", "ドラゴン", "トイレ", "雪だるま", "イルカ", "タコ", "メロン", "温泉", "注射器", "魔法使い"
+    ];
+
+    // --- 状態管理変数 ---
+    let players = [];
+    let currentRound = 1;
+    let currentDrawerIndex = 0;
+    let currentPrompt = "";
+    let guesses = []; // { playerIndex, guessText, isCorrect }
+    let guesserQueue = []; // 回答する人のインデックス配列
+    let currentGuesserIndexInQueue = 0;
+    let drawnImageData = ""; // CanvasのDataURLを保存
+
+    // Canvas関連
+    const canvas = document.getElementById('drawing-canvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let currentColor = '#000000';
+    let currentLineWidth = 5;
+    let timerInterval;
+    let timeLeft = 60;
+
+    // --- 初期化・UI設定 ---
+    document.addEventListener('DOMContentLoaded', () => {
+        setupPlayerInputs();
+        document.getElementById('player-count').addEventListener('change', setupPlayerInputs);
+        setupCanvas();
+    });
+
+    function setupPlayerInputs() {
+        const count = parseInt(document.getElementById('player-count').value);
+        const container = document.getElementById('player-names-container');
+        container.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = `player-name-${i}`;
+            input.placeholder = `プレイヤー ${i + 1} の名前`;
+            input.value = `プレイヤー${i + 1}`;
+            container.appendChild(input);
+        }
+    }
+
+    function switchScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    // --- ゲーム進行ロジック ---
+
+    // 1. ゲーム開始
+    function startGame() {
+        const count = parseInt(document.getElementById('player-count').value);
+        players = [];
+        for (let i = 0; i < count; i++) {
+            const name = document.getElementById(`player-name-${i}`).value || `プレイヤー${i + 1}`;
+            players.push({ name: name, score: 0 });
+        }
+        
+        currentRound = 1;
+        currentDrawerIndex = 0; // 最初はプレイヤー1
+        startRoundSetup();
+    }
+
+    // ラウンド開始準備
+    function startRoundSetup() {
+        // お題をランダム決定
+        currentPrompt = PROMPT_LIST[Math.floor(Math.random() * PROMPT_LIST.length)];
+        guesses = [];
+        
+        document.getElementById('display-round-num').innerText = `${currentRound} / ${players.length}`;
+        document.getElementById('drawer-name').innerText = players[currentDrawerIndex].name;
+        
+        switchScreen('screen-pass-drawer');
+    }
+
+    // お題表示
+    function showPrompt() {
+        document.getElementById('secret-prompt').innerText = currentPrompt;
+        switchScreen('screen-prompt');
+    }
+
+    // 3. お絵かきフェーズ開始
+    function startDrawing() {
+        document.getElementById('drawing-player-name').innerText = players[currentDrawerIndex].name;
+        document.getElementById('drawing-prompt-reminder').innerText = currentPrompt;
+        
+        // Canvas初期化
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        setColor('#000000', document.querySelector('.color-btn')); // 黒に戻す
+        
+        // タイマーセット
+        timeLeft = 60;
+        updateTimerDisplay();
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerDisplay();
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                finishDrawing();
+            }
+        }, 1000);
+
+        switchScreen('screen-drawing');
+    }
+
+    function updateTimerDisplay() {
+        const timerEl = document.getElementById('drawing-timer');
+        timerEl.innerText = timeLeft;
+        if (timeLeft <= 10) {
+            timerEl.classList.add('danger');
+        } else {
+            timerEl.classList.remove('danger');
+        }
+    }
+
+    // お絵かき終了 -> 回答フェーズ準備
+    function finishDrawing() {
+        clearInterval(timerInterval);
+        // 画像データを保存
+        drawnImageData = canvas.toDataURL('image/png');
+        
+        // 回答者のキューを作成（描き手以外）
+        guesserQueue = [];
+        for (let i = 0; i < players.length; i++) {
+            if (i !== currentDrawerIndex) {
+                guesserQueue.push(i);
+            }
+        }
+        currentGuesserIndexInQueue = 0;
+        
+        prepareNextGuesser();
+    }
+
+    // 4. 回答者交代
+    function prepareNextGuesser() {
+        if (currentGuesserIndexInQueue >= guesserQueue.length) {
+            // 全員の回答が終了したら採点フェーズへ
+            calculateScores();
+            return;
+        }
+
+        const guesserIndex = guesserQueue[currentGuesserIndexInQueue];
+        document.getElementById('guesser-name-pass').innerText = players[guesserIndex].name;
+        document.getElementById('guess-input').value = ''; // 入力欄リセット
+        switchScreen('screen-pass-guesser');
+    }
+
+    // 回答入力画面表示
+    function startGuessing() {
+        const guesserIndex = guesserQueue[currentGuesserIndexInQueue];
+        document.getElementById('guesser-name-active').innerText = players[guesserIndex].name;
+        document.getElementById('guess-image-display').src = drawnImageData;
+        switchScreen('screen-guessing');
+        document.getElementById('guess-input').focus();
+    }
+
+    // 回答送信
+    function submitGuess() {
+        const guessText = document.getElementById('guess-input').value.trim();
+        if (!guessText) {
+            alert("回答を入力してください！");
+            return;
+        }
+
+        const guesserIndex = guesserQueue[currentGuesserIndexInQueue];
+        // 判定（表記揺れを厳密に処理するのは難しいため、完全一致か部分一致かで簡易判定）
+        // ※ここではひらがな・カタカナ等の完全一致を基準とし、必要に応じて拡張可能
+        const isCorrect = (guessText === currentPrompt);
+
+        guesses.push({
+            playerIndex: guesserIndex,
+            guessText: guessText,
+            isCorrect: isCorrect
+        });
+
+        currentGuesserIndexInQueue++;
+        prepareNextGuesser();
+    }
+
+    // 5. 採点・結果表示フェーズ
+    function calculateScores() {
+        let correctCount = guesses.filter(g => g.isCorrect).length;
+        let totalGuessers = guesserQueue.length;
+        
+        // --- 描き手の得点計算ルール ---
+        let drawerPoints = 0;
+        if (correctCount === 0) {
+            drawerPoints = 80; // 伝わらなさすぎ（中〜低得点）
+        } else if (correctCount === totalGuessers) {
+            drawerPoints = 30; // 全員正解（簡単すぎ）
+        } else if (correctCount === 1) {
+            drawerPoints = 200; // 絶妙！最高得点
+        } else if (correctCount === 2) {
+            drawerPoints = 150; // なかなか絶妙
+        } else {
+            drawerPoints = 100; // それ以外（人数が多い場合など）
+        }
+
+        // スコア加算
+        players[currentDrawerIndex].score += drawerPoints;
+
+        // --- 回答者の得点計算ルール ---
+        guesses.forEach(g => {
+            if (g.isCorrect) {
+                players[g.playerIndex].score += 100;
+            }
+        });
+
+        // 画面構築
+        document.getElementById('result-prompt').innerText = currentPrompt;
+        document.getElementById('result-image-display').src = drawnImageData;
+        
+        const listEl = document.getElementById('round-guess-list');
+        listEl.innerHTML = '';
+        guesses.forEach(g => {
+            const li = document.createElement('li');
+            li.className = g.isCorrect ? 'correct' : 'incorrect';
+            li.innerHTML = `
+                <span><strong>${players[g.playerIndex].name}</strong> の回答: 「${g.guessText}」</span>
+                <span>${g.isCorrect ? '⭕ 正解 (+100)' : '❌ 不正解'}</span>
+            `;
+            listEl.appendChild(li);
+        });
+
+        let drawerSummary = `${players[currentDrawerIndex].name} (描き手): 正解者 ${correctCount}人 / ${totalGuessers}人中<br>➔ <strong>+${drawerPoints} 点獲得！</strong>`;
+        if (correctCount === 1) drawerSummary += " <span style='color:var(--primary);'>絶妙な絵！</span>";
+        if (correctCount === totalGuessers) drawerSummary += " <span style='color:gray;'>簡単すぎたかも…</span>";
+        if (correctCount === 0) drawerSummary += " <span style='color:gray;'>誰にも伝わらなかった…</span>";
+        
+        document.getElementById('drawer-points-text').innerHTML = drawerSummary;
+
+        switchScreen('screen-round-result');
+    }
+
+    // 次のラウンドまたは最終結果へ
+    function nextRoundCheck() {
+        currentRound++;
+        currentDrawerIndex++;
+
+        if (currentDrawerIndex >= players.length) {
+            showFinalResult();
+        } else {
+            startRoundSetup();
+        }
+    }
+
+    // 6. 最終結果発表
+    function showFinalResult() {
+        // スコア順にソート（同点の場合は元の順序）
+        let sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+        
+        const tbody = document.querySelector('#final-score-board tbody');
+        tbody.innerHTML = '';
+        
+        sortedPlayers.forEach((p, index) => {
+            const tr = document.createElement('tr');
+            if (index === 0) tr.className = 'rank-1';
+            
+            let rankStr = `${index + 1}位`;
+            if (index === 0) rankStr = '👑 1位';
+
+            tr.innerHTML = `
+                <td>${rankStr}</td>
+                <td>${p.name}</td>
+                <td>${p.score} 点</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('winner-announcement').innerText = `優勝は ${sortedPlayers[0].name} さん！おめでとう！`;
+        
+        switchScreen('screen-final-result');
+    }
+
+    function resetGame() {
+        switchScreen('screen-title');
+    }
+
+    /* =========================================
+       Canvas お絵かき処理
+    ========================================= */
+    function setupCanvas() {
+        // 座標計算のヘルパー（レスポンシブ対応）
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            // 実際のCanvasピクセルサイズとCSS表示サイズの比率を計算
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+            
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function startDraw(e) {
+            e.preventDefault();
+            isDrawing = true;
+            const pos = getPos(e);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = document.getElementById('line-width').value;
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            const pos = getPos(e);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+        }
+
+        function stopDraw() {
+            if (isDrawing) {
+                ctx.closePath();
+                isDrawing = false;
+            }
+        }
+
+        // PCマウスイベント
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDraw);
+        canvas.addEventListener('mouseout', stopDraw);
+
+        // スマホタッチイベント
+        canvas.addEventListener('touchstart', startDraw, {passive: false});
+        canvas.addEventListener('touchmove', draw, {passive: false});
+        canvas.addEventListener('touchend', stopDraw);
+    }
+
+    function setColor(color, element) {
+        currentColor = color;
+        // 選択状態のUI更新
+        document.querySelectorAll('.color-btn').forEach(btn => btn.classList.remove('selected'));
+        if (element) {
+            element.classList.add('selected');
+        }
+    }
+
+    function setEraser() {
+        // 消しゴムは背景色（白）で描画する
+        currentColor = '#FFFFFF';
+        document.querySelectorAll('.color-btn').forEach(btn => btn.classList.remove('selected'));
+    }
+
+    function clearCanvas() {
+        if(confirm('本当にすべて消しますか？')) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    // 太さ変更イベント同期
+    document.getElementById('line-width').addEventListener('input', function(e) {
+        currentLineWidth = e.target.value;
+    });
+
+</script>
+
+</body>
+</html>
