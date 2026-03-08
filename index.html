@@ -94,6 +94,11 @@
     <div id="screen-result" class="screen">
         <h2>正解は「<span id="result-prompt"></span>」</h2>
         <img id="result-image-display-2" class="result-image" src="">
+        
+        <div id="answers-log" style="width: 100%; margin: 15px 0; background: #fff; border-radius: 10px; padding: 10px; box-sizing: border-box;">
+            <h3 style="font-size: 1em; margin: 0 0 10px 0; color: var(--secondary);">みんなの回答</h3>
+            <ul id="answers-list" style="list-style: none; padding: 0; margin: 0; text-align: left;"></ul>
+        </div>
         <div id="drawer-points-text" style="margin: 10px 0; font-weight: bold;"></div>
         <button id="btn-next-round" onclick="nextRound()" style="display: none;">次のラウンド</button>
         <p id="wait-next-msg">ホストが次へ進めるのを待っています...</p>
@@ -230,6 +235,21 @@
                 switchScreen('screen-result');
                 document.getElementById('result-prompt').innerText = data.currentPrompt;
                 document.getElementById('result-image-display-2').src = data.canvasData;
+            
+                // みんなの回答をリストアップして表示
+                const answersList = document.getElementById('answers-list');
+                const guesses = data.guesses || {};
+                answersList.innerHTML = Object.keys(guesses).map(uid => {
+                    const g = guesses[uid];
+                    const pName = data.players[uid]?.name || "ななし";
+                    const mark = g.correct ? "✅ 正解！" : "❌ 不正解";
+                    const color = g.correct ? "#27ae60" : "#c0392b";
+                    return `<li style="padding: 5px; border-bottom: 1px solid #eee; color: ${color};">
+                                <strong>${pName}</strong>: ${g.text} <span>${mark}</span>
+                            </li>`;
+                }).join('');
+            
+                // ホストボタンの制御などはそのまま
                 if (isHost) {
                     document.getElementById('btn-next-round').style.display = 'block';
                     document.getElementById('wait-next-msg').style.display = 'none';
