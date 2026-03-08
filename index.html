@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>だまし絵マスター - ターン修正版</title>
+    <title>だまし絵マスター - 匿名サークル版</title>
     <style>
         :root { --primary: #FF6B6B; --secondary: #4ECDC4; --accent: #FFE66D; --dark: #2C3E50; --light: #F7FFF7; --bg: #E8F8F5; }
         body { font-family: 'Hiragino Maru Gothic ProN', 'Rounded M+ 1c', 'Meiryo', sans-serif; background-color: var(--bg); color: var(--dark); margin: 0; padding: 0; display: flex; justify-content: center; min-height: 100vh; overflow-x: hidden; }
@@ -16,19 +16,15 @@
         button { background-color: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 30px; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: all 0.1s; box-shadow: 0 6px 0 #C0392B; margin: 10px; width: 80%; max-width: 300px; }
         button:hover { transform: translateY(2px); box-shadow: 0 4px 0 #C0392B; }
         button:active { transform: translateY(6px); box-shadow: 0 0 0 #C0392B; }
+        .btn-ban { background: #e74c3c; box-shadow: 0 3px 0 #c0392b; font-size: 0.7em; padding: 5px 10px; width: auto; margin-left: 10px; }
         input[type="text"] { width: 80%; max-width: 300px; padding: 12px; font-size: 1.1em; border: 3px solid #ddd; border-radius: 10px; text-align: center; margin-bottom: 15px; }
         .canvas-container { width: 100%; background: white; border: 4px solid var(--dark); border-radius: 15px; overflow: hidden; margin-bottom: 10px; touch-action: none; position: relative; aspect-ratio: 4 / 3; }
         canvas { display: block; width: 100%; height: 100%; background-color: #ffffff; }
         #canvas-blocker { position: absolute; top:0; left:0; right:0; bottom:0; z-index: 10; display: none; }
-        .tools { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 10px; }
-        .color-btn { width: 30px; height: 30px; border-radius: 50%; border: 3px solid #ddd; cursor: pointer; }
-        .color-btn.selected { border-color: var(--dark); transform: scale(1.1); }
-        .status-bar { width: 100%; background: var(--dark); color: white; padding: 10px; display: flex; justify-content: space-between; box-sizing: border-box; font-size: 0.9em; }
-        .timer { font-size: 1.2em; color: var(--accent); font-weight: bold; }
         .player-list { width: 100%; list-style: none; padding: 0; text-align: center; }
+        .player-item { display: flex; align-items: center; justify-content: center; background: #fff; margin: 5px; padding: 10px; border-radius: 10px; border: 1px solid #ddd; }
+        .status-bar { width: 100%; background: var(--dark); color: white; padding: 10px; display: flex; justify-content: space-between; box-sizing: border-box; font-size: 0.9em; }
         .result-image { width: 100%; max-width: 400px; border: 4px solid var(--dark); border-radius: 10px; background: white; }
-        .score-board { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .score-board td { padding: 8px; border-bottom: 1px solid #ddd; text-align: center; }
     </style>
 </head>
 <body>
@@ -37,17 +33,19 @@
     <div id="screen-title" class="screen active">
         <h1>だまし絵マスター</h1>
         <input type="text" id="my-name" placeholder="なまえを入力" maxlength="10">
-        <button onclick="createRoom()">部屋を作る</button>
+        <button onclick="enterCircle()" style="background-color: var(--accent); color: var(--dark); box-shadow: 0 6px 0 #D4AC0D;">匿名サークルに入る</button>
         <div style="margin: 10px 0; color: #999;">または</div>
         <input type="text" id="join-room-id" placeholder="合言葉を入力" style="text-transform: uppercase;">
         <button onclick="joinRoom()" style="background-color: var(--secondary); box-shadow: 0 6px 0 #16A085;">部屋に入る</button>
+        <button onclick="createRoom()" style="background-color: #999; font-size: 0.8em; box-shadow: 0 4px 0 #666;">（新規ホストで部屋を作る）</button>
     </div>
 
     <div id="screen-lobby" class="screen">
-        <h2>合言葉: <span id="display-room-id" style="color: var(--primary);">----</span></h2>
+        <h2 id="lobby-title">待合室</h2>
         <ul class="player-list" id="lobby-players"></ul>
         <button id="btn-start-game" onclick="startGame()" style="display: none;">ゲーム開始</button>
         <p id="waiting-host-msg">ホストの開始を待っています...</p>
+        <button onclick="location.reload()" style="background: #999; width: auto; font-size: 0.8em;">退出する</button>
     </div>
 
     <div id="screen-prompt" class="screen">
@@ -58,25 +56,16 @@
             <div id="secret-prompt" style="font-size: 2em; font-weight: bold; background: var(--accent); padding: 10px; border-radius: 10px;"></div>
             <button onclick="advanceState('drawing')" id="btn-start-drawing" style="display: none; margin-top: 20px;">描きはじめる</button>
         </div>
-        <div id="guesser-prompt-view" style="display: none;">
-            <p>描き手がお題を確認中...</p>
-        </div>
+        <div id="guesser-prompt-view" style="display: none;"><p>描き手がお題を確認中...</p></div>
     </div>
 
     <div id="screen-drawing" class="screen" style="padding: 0;">
-        <div class="status-bar">
-            <div id="drawing-status-text">待機中...</div>
-            <div class="timer" id="drawing-timer">60</div>
-        </div>
-        <div class="canvas-container">
-            <canvas id="drawing-canvas" width="600" height="450"></canvas>
-            <div id="canvas-blocker"></div>
-        </div>
-        <div id="drawing-tools" class="tools" style="display: none;">
-            <div class="color-btn selected" style="background: #000;" onclick="setColor('#000', this)"></div>
-            <div class="color-btn" style="background: #f00;" onclick="setColor('#f00', this)"></div>
-            <div class="color-btn" style="background: #00f;" onclick="setColor('#00f', this)"></div>
-            <button onclick="clearCanvas()" style="width:auto; padding: 5px 15px; margin:0;">消去</button>
+        <div class="status-bar"><div id="drawing-status-text">待機中...</div><div class="timer" id="drawing-timer" style="color:var(--accent); font-weight:bold;">60</div></div>
+        <div class="canvas-container"><canvas id="drawing-canvas" width="600" height="450"></canvas><div id="canvas-blocker"></div></div>
+        <div id="drawing-tools" style="display:none; gap:10px; margin-bottom:10px;">
+            <button onclick="setColor('#000')" style="width:30px; height:30px; border-radius:50%; background:#000; padding:0;"></button>
+            <button onclick="setColor('#f00')" style="width:30px; height:30px; border-radius:50%; background:#f00; padding:0;"></button>
+            <button onclick="clearCanvas()" style="width:auto; padding: 5px 15px; font-size:0.8em;">消去</button>
         </div>
         <button id="btn-finish-drawing" onclick="finishDrawing()" style="display: none;">描けた！</button>
     </div>
@@ -88,36 +77,27 @@
             <input type="text" id="guess-input" placeholder="答えを入力">
             <button onclick="submitGuess()">回答送信</button>
         </div>
-        <div id="guess-wait-area" style="display: none;"><p>他の人の回答を待っています...</p></div>
     </div>
 
     <div id="screen-result" class="screen">
         <h2>正解は「<span id="result-prompt"></span>」</h2>
         <img id="result-image-display-2" class="result-image" src="">
-        
         <div id="answers-log" style="width: 100%; margin: 15px 0; background: #fff; border-radius: 10px; padding: 10px; box-sizing: border-box;">
-            <h3 style="font-size: 1em; margin: 0 0 10px 0; color: var(--secondary);">みんなの回答</h3>
             <ul id="answers-list" style="list-style: none; padding: 0; margin: 0; text-align: left;"></ul>
         </div>
-        <div id="drawer-points-text" style="margin: 10px 0; font-weight: bold;"></div>
         <button id="btn-next-round" onclick="nextRound()" style="display: none;">次のラウンド</button>
-        <p id="wait-next-msg">ホストが次へ進めるのを待っています...</p>
-    </div>
-
-    <div id="screen-final" class="screen">
-        <h1>最終スコア</h1>
-        <table class="score-board" id="final-score-board"><tbody></tbody></table>
-        <button onclick="location.reload()">タイトルへ</button>
     </div>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue, update, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+    import { getDatabase, ref, set, onValue, update, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
     // For Firebase JS SDK v7.20.0 and later, measurementId is optional
     const firebaseConfig = {
       apiKey: "AIzaSyACEPLiM3hhj2uQoxg-kJt1RF2zmfE6Uqg",
       authDomain: "basashi-c1588.firebaseapp.com",
+      databaseURL: "https://basashi-c1588-default-rtdb.firebaseio.com",
       projectId: "basashi-c1588",
       storageBucket: "basashi-c1588.firebasestorage.app",
       messagingSenderId: "622463342057",
@@ -128,9 +108,10 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    let myUid = Math.random().toString(36).substring(2, 10);
+    let myUid = localStorage.getItem('myUid') || Math.random().toString(36).substring(2, 10);
+    localStorage.setItem('myUid', myUid);
     let myName = "", roomId = "", isHost = false, roomRef = null, roomState = {};
-    const PROMPT_LIST = ["ねこ", "かさ", "ピザ", "かき氷", "すべり台", "にわとり", "ドーナツ", "めがね", "ひまわり", "ロケット", "パンダ", "さくらんぼ"];
+    const PROMPT_LIST = ["ねこ", "かさ", "ピザ", "かき氷", "パンダ", "ロケット", "ピアノ", "りんご", "めがね", "ひまわり"];
 
     const canvas = document.getElementById('drawing-canvas');
     const ctx = canvas.getContext('2d');
@@ -141,139 +122,136 @@
         document.getElementById(id).classList.add('active');
     }
 
-    window.createRoom = async () => {
-        myName = document.getElementById('my-name').value || "プレイヤー";
-        roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
+    // --- 匿名サークル機能 ---
+    window.enterCircle = async () => {
+        // 固定の部屋ID「PUBLIC」を使用
+        roomId = "PUBLIC";
+        roomRef = ref(db, `rooms/${roomId}`);
+        const snap = await get(roomRef);
+        
+        if (!snap.exists()) {
+            // まだサークルがなければホストとして作成
+            createRoom("PUBLIC");
+        } else {
+            // 既にサークルがあれば参加
+            joinRoom("PUBLIC");
+        }
+    };
+
+    window.createRoom = async (specificId) => {
+        myName = document.getElementById('my-name').value || "ゲスト";
+        roomId = specificId || Math.random().toString(36).substring(2, 6).toUpperCase();
         isHost = true;
         roomRef = ref(db, `rooms/${roomId}`);
         await set(roomRef, {
             state: "lobby", hostUid: myUid, round: 1, drawerIndex: 0,
-            players: { [myUid]: { name: myName, score: 0, order: 0 } }
+            players: { [myUid]: { name: myName, score: 0, order: Date.now() } }
         });
         initListener();
         switchScreen('screen-lobby');
     };
 
-    window.joinRoom = async () => {
-        myName = document.getElementById('my-name').value || "プレイヤー";
-        roomId = document.getElementById('join-room-id').value.toUpperCase();
+    window.joinRoom = async (specificId) => {
+        myName = document.getElementById('my-name').value || "ゲスト";
+        roomId = specificId || document.getElementById('join-room-id').value.toUpperCase();
         roomRef = ref(db, `rooms/${roomId}`);
         const snap = await get(roomRef);
         if (!snap.exists()) return alert("部屋がないよ");
-        const order = Object.keys(snap.val().players).length;
-        await update(child(roomRef, 'players'), { [myUid]: { name: myName, score: 0, order: order } });
+
+        // BANチェック
+        if (snap.val().banList && snap.val().banList[myUid]) {
+            return alert("このサークルからはBANされています。");
+        }
+
+        await update(child(roomRef, 'players'), { [myUid]: { name: myName, score: 0, order: Date.now() } });
         initListener();
         switchScreen('screen-lobby');
+    };
+
+    // BAN機能
+    window.banPlayer = (uid) => {
+        if (!isHost) return;
+        if (uid === myUid) return alert("自分はBANできません");
+        if (confirm("このプレイヤーをBANしますか？")) {
+            update(child(roomRef, 'banList'), { [uid]: true });
+            remove(child(roomRef, `players/${uid}`));
+        }
     };
 
     function initListener() {
         onValue(roomRef, (snap) => {
             const data = snap.val(); if (!data) return;
             roomState = data;
-            const playerKeys = Object.keys(data.players).sort((a,b) => data.players[a].order - data.players[b].order);
+            
+            // BANされたら強制退出
+            if (data.banList && data.banList[myUid]) {
+                alert("BANされました。");
+                location.reload();
+            }
+
+            const playerKeys = Object.keys(data.players || {}).sort((a,b) => data.players[a].order - data.players[b].order);
+            if (!data.players[myUid] && data.state !== "lobby") return; // 自分が消えたら終了
+
             const currentDrawerUid = playerKeys[data.drawerIndex];
             const isMeDrawer = (myUid === currentDrawerUid);
+            isHost = (data.hostUid === myUid);
 
             if (data.state === "lobby") {
-                document.getElementById('display-room-id').innerText = roomId;
-                document.getElementById('lobby-players').innerHTML = playerKeys.map(k => `<li>${data.players[k].name}</li>`).join('');
-                if (isHost) {
-                    document.getElementById('btn-start-game').style.display = 'block';
-                    document.getElementById('waiting-host-msg').style.display = 'none';
-                }
+                switchScreen('screen-lobby');
+                document.getElementById('lobby-title').innerText = (roomId === "PUBLIC") ? "匿名サークル" : `部屋: ${roomId}`;
+                document.getElementById('lobby-players').innerHTML = playerKeys.map(k => {
+                    const banBtn = (isHost && k !== myUid) ? `<button class="btn-ban" onclick="banPlayer('${k}')">BAN</button>` : "";
+                    return `<li class="player-item">${data.players[k].name}${banBtn}</li>`;
+                }).join('');
+                document.getElementById('btn-start-game').style.display = isHost ? 'block' : 'none';
+                document.getElementById('waiting-host-msg').style.display = isHost ? 'none' : 'block';
             }
+            
+            // 以降、お絵かき等の状態遷移（前回の修正を統合）
             if (data.state === "prompt") {
                 switchScreen('screen-prompt');
-                document.getElementById('round-info').innerText = `Round ${data.round}`;
-                document.getElementById('turn-player-name').innerText = `${data.players[currentDrawerUid].name}さんの番`;
+                document.getElementById('turn-player-name').innerText = `${data.players[currentDrawerUid]?.name}さんの番`;
                 if (isMeDrawer) {
                     document.getElementById('drawer-prompt-view').style.display = 'block';
-                    document.getElementById('guesser-prompt-view').style.display = 'none';
                     document.getElementById('secret-prompt').innerText = data.currentPrompt;
-                    // 【修正】ホストチェックを外し、描き手ならボタンが出るように
                     document.getElementById('btn-start-drawing').style.display = 'inline-block';
                 } else {
                     document.getElementById('drawer-prompt-view').style.display = 'none';
-                    document.getElementById('guesser-prompt-view').style.display = 'block';
                 }
             }
+
             if (data.state === "drawing") {
                 switchScreen('screen-drawing');
                 document.getElementById('drawing-timer').innerText = data.timeLeft;
-                if (isMeDrawer) {
-                    document.getElementById('drawing-tools').style.display = 'flex';
-                    document.getElementById('btn-finish-drawing').style.display = 'block';
-                    document.getElementById('canvas-blocker').style.display = 'none';
-                    document.getElementById('drawing-status-text').innerText = `お題: ${data.currentPrompt}`;
-                } else {
-                    document.getElementById('drawing-tools').style.display = 'none';
-                    document.getElementById('btn-finish-drawing').style.display = 'none';
-                    document.getElementById('canvas-blocker').style.display = 'block';
-                    document.getElementById('drawing-status-text').innerText = `${data.players[currentDrawerUid].name}が描いています...`;
-                    if (data.canvasData) {
-                        const img = new Image();
-                        img.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); };
-                        img.src = data.canvasData;
-                    }
+                if (!isMeDrawer && data.canvasData) {
+                    const img = new Image();
+                    img.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); };
+                    img.src = data.canvasData;
                 }
+                document.getElementById('drawing-tools').style.display = isMeDrawer ? 'flex' : 'none';
+                document.getElementById('btn-finish-drawing').style.display = isMeDrawer ? 'block' : 'none';
+                document.getElementById('canvas-blocker').style.display = isMeDrawer ? 'none' : 'block';
             }
-            if (data.state === "guessing") {
-                switchScreen('screen-guessing');
-                document.getElementById('guess-image-display').src = data.canvasData;
-                if (isMeDrawer || (data.guesses && data.guesses[myUid])) {
-                    document.getElementById('guess-input-area').style.display = 'none';
-                    document.getElementById('guess-wait-area').style.display = 'block';
-                } else {
-                    document.getElementById('guess-input-area').style.display = 'block';
-                    document.getElementById('guess-wait-area').style.display = 'none';
-                }
-                if (isHost && data.guesses && Object.keys(data.guesses).length >= playerKeys.length - 1) {
-                    calcResult(data, playerKeys, currentDrawerUid);
-                }
-            }
+
             if (data.state === "result") {
                 switchScreen('screen-result');
                 document.getElementById('result-prompt').innerText = data.currentPrompt;
                 document.getElementById('result-image-display-2').src = data.canvasData;
-            
-                // みんなの回答をリストアップして表示
-                const answersList = document.getElementById('answers-list');
                 const guesses = data.guesses || {};
-                answersList.innerHTML = Object.keys(guesses).map(uid => {
-                    const g = guesses[uid];
-                    const pName = data.players[uid]?.name || "ななし";
-                    const mark = g.correct ? "✅ 正解！" : "❌ 不正解";
-                    const color = g.correct ? "#27ae60" : "#c0392b";
-                    return `<li style="padding: 5px; border-bottom: 1px solid #eee; color: ${color};">
-                                <strong>${pName}</strong>: ${g.text} <span>${mark}</span>
-                            </li>`;
+                document.getElementById('answers-list').innerHTML = Object.keys(guesses).map(uid => {
+                    return `<li>${data.players[uid]?.name || "？"}: ${guesses[uid].text} ${guesses[uid].correct ? "✅" : "❌"}</li>`;
                 }).join('');
-            
-                // ホストボタンの制御などはそのまま
-                if (isHost) {
-                    document.getElementById('btn-next-round').style.display = 'block';
-                    document.getElementById('wait-next-msg').style.display = 'none';
-                } else {
-                    document.getElementById('btn-next-round').style.display = 'none';
-                    document.getElementById('wait-next-msg').style.display = 'block';
-                }
-            }
-            if (data.state === "final") {
-                switchScreen('screen-final');
-                const sorted = playerKeys.sort((a,b) => data.players[b].score - data.players[a].score);
-                document.querySelector('#final-score-board tbody').innerHTML = sorted.map((k, i) => `<tr><td>${i+1}位</td><td>${data.players[k].name}</td><td>${data.players[k].score}点</td></tr>`).join('');
+                document.getElementById('btn-next-round').style.display = isHost ? 'block' : 'none';
             }
         });
     }
 
+    // 進行ロジック
     window.startGame = () => update(roomRef, { state: "prompt", currentPrompt: PROMPT_LIST[Math.floor(Math.random()*PROMPT_LIST.length)] });
-    
     window.advanceState = (s) => {
         update(roomRef, { state: s });
         if (s === "drawing") {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            syncCanvas();
+            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height); syncCanvas();
             let t = 60;
             const timer = setInterval(() => {
                 if (roomState.state !== "drawing") { clearInterval(timer); return; }
@@ -282,70 +260,38 @@
             }, 1000);
         }
     };
-
     window.finishDrawing = () => update(roomRef, { state: "guessing" });
-
     window.submitGuess = () => {
         const val = document.getElementById('guess-input').value.trim();
-        if(!val) return;
         update(child(roomRef, `guesses/${myUid}`), { text: val, correct: (val === roomState.currentPrompt) });
         document.getElementById('guess-input').value = "";
     };
-
-    async function calcResult(data, keys, drawerUid) {
-        const guesses = data.guesses || {};
-        const corrects = Object.values(guesses).filter(g => g.correct).length;
-        let up = { state: "result" };
-        for (let k in guesses) if(guesses[k].correct) up[`players/${k}/score`] = data.players[k].score + 100;
-        let dPts = (corrects === 0) ? 80 : (corrects === keys.length - 1) ? 30 : 150;
-        up[`players/${drawerUid}/score`] = data.players[drawerUid].score + dPts;
-        update(roomRef, up);
-    }
-
     window.nextRound = () => {
-        const keys = Object.keys(roomState.players).sort((a,b) => roomState.players[a].order - roomState.players[b].order);
+        const keys = Object.keys(roomState.players);
         let next = roomState.drawerIndex + 1;
-        if (next >= keys.length) update(roomRef, { state: "final" });
+        if (next >= keys.length) update(roomRef, { state: "lobby", round: 1, drawerIndex: 0, guesses: null, canvasData: "" });
         else update(roomRef, { state: "prompt", drawerIndex: next, round: roomState.round + 1, currentPrompt: PROMPT_LIST[Math.floor(Math.random()*PROMPT_LIST.length)], guesses: null, canvasData: "" });
     };
 
-    function syncCanvas() {
-        if (roomRef && roomState.state === "drawing") {
-            update(roomRef, { canvasData: canvas.toDataURL('image/jpeg', 0.5) });
-        }
-    }
-
+    // お絵かき同期系
+    function syncCanvas() { if (roomState.state === "drawing") update(roomRef, { canvasData: canvas.toDataURL('image/jpeg', 0.5) }); }
     function getPos(e) {
         const r = canvas.getBoundingClientRect();
         const x = e.touches ? e.touches[0].clientX : e.clientX;
         const y = e.touches ? e.touches[0].clientY : e.clientY;
         return { x: (x - r.left) * (canvas.width / r.width), y: (y - r.top) * (canvas.height / r.height) };
     }
-
-    function startDraw(e) {
-        const keys = Object.keys(roomState.players).sort((a,b) => roomState.players[a].order - roomState.players[b].order);
-        if (myUid !== keys[roomState.drawerIndex] || roomState.state !== "drawing") return;
-        isDrawing = true; const p = getPos(e);
-        ctx.beginPath(); ctx.moveTo(p.x, p.y);
-        ctx.strokeStyle = currentColor; ctx.lineWidth = 5; ctx.lineCap = 'round';
-    }
-
-    canvas.addEventListener('mousedown', startDraw);
-    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e); });
+    canvas.addEventListener('mousedown', (e) => {
+        if (roomState.state !== "drawing" || roomState.drawerIndex !== Object.keys(roomState.players).sort((a,b)=>roomState.players[a].order-roomState.players[b].order).indexOf(myUid)) return;
+        isDrawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    });
     window.addEventListener('mousemove', (e) => {
         if (!isDrawing) return;
-        const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke();
+        const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.strokeStyle = currentColor; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke();
         if (Math.random() > 0.8) syncCanvas();
     });
-    window.addEventListener('touchmove', (e) => {
-        if (!isDrawing) return;
-        const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke();
-        if (Math.random() > 0.8) syncCanvas();
-    }, {passive: false});
     window.addEventListener('mouseup', () => { if(isDrawing){ isDrawing = false; syncCanvas(); } });
-    window.addEventListener('touchend', () => { if(isDrawing){ isDrawing = false; syncCanvas(); } });
-
-    window.setColor = (c, el) => { currentColor = c; document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected')); el.classList.add('selected'); };
+    window.setColor = (c) => currentColor = c;
     window.clearCanvas = () => { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height); syncCanvas(); };
 </script>
 </body>
