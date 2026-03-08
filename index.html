@@ -13,7 +13,7 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         h1 { color: var(--primary); font-size: 2em; text-align: center; text-shadow: 2px 2px 0px var(--accent); margin-bottom: 10px; }
         h2 { color: var(--secondary); font-size: 1.4em; margin-bottom: 15px; text-align: center; }
-        button { background-color: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 30px; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: all 0.1s; box-shadow: 0 6px 0 #C0392B; margin: 10px; width: 80%; max-width: 300px; }
+        button { background-color: var(--primary); color: white; border: none; position: relative; z-index: 20; padding: 12px 24px; border-radius: 30px; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: all 0.1s; box-shadow: 0 6px 0 #C0392B; margin: 10px; width: 80%; max-width: 300px; }
         button:hover { transform: translateY(2px); box-shadow: 0 4px 0 #C0392B; }
         button:active { transform: translateY(6px); box-shadow: 0 0 0 #C0392B; }
         .btn-ban { background: #e74c3c; box-shadow: 0 3px 0 #c0392b; font-size: 0.7em; padding: 5px 10px; width: auto; margin-left: 10px; }
@@ -220,17 +220,21 @@
                 }
             }
 
+            // initListener内の if (data.state === "drawing") ブロックを修正
             if (data.state === "drawing") {
                 switchScreen('screen-drawing');
-                document.getElementById('drawing-timer').innerText = data.timeLeft;
-                if (!isMeDrawer && data.canvasData) {
-                    const img = new Image();
-                    img.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); };
-                    img.src = data.canvasData;
+                
+                if (isMeDrawer) {
+                    // 描き手本人の場合
+                    document.getElementById('canvas-blocker').style.display = 'none'; // 【重要】壁を消す
+                    document.getElementById('drawing-tools').style.display = 'flex';
+                    document.getElementById('btn-finish-drawing').style.display = 'block';
+                } else {
+                    // 回答者の場合
+                    document.getElementById('canvas-blocker').style.display = 'block'; // 壁でガード
+                    document.getElementById('drawing-tools').style.display = 'none';
+                    document.getElementById('btn-finish-drawing').style.display = 'none';
                 }
-                document.getElementById('drawing-tools').style.display = isMeDrawer ? 'flex' : 'none';
-                document.getElementById('btn-finish-drawing').style.display = isMeDrawer ? 'block' : 'none';
-                document.getElementById('canvas-blocker').style.display = isMeDrawer ? 'none' : 'block';
             }
 
             if (data.state === "result") {
@@ -251,12 +255,26 @@
     window.advanceState = (s) => {
         update(roomRef, { state: s });
         if (s === "drawing") {
-            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height); syncCanvas();
+            // 前のタイマーがあれば止める
+            if (window.drawTimer) clearInterval(window.drawTimer);
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            syncCanvas();
+    
             let t = 60;
-            const timer = setInterval(() => {
-                if (roomState.state !== "drawing") { clearInterval(timer); return; }
-                t--; update(roomRef, { timeLeft: t });
-                if (t <= 0) { clearInterval(timer); update(roomRef, { state: "guessing" }); }
+            window.drawTimer = setInterval(() => {
+                // 状態が変わっていたらタイマー終了
+                if (roomState.state !== "drawing") {
+                    clearInterval(window.drawTimer);
+                    return;
+                }
+                t--;
+                update(roomRef, { timeLeft: t });
+                if (t <= 0) {
+                    clearInterval(window.drawTimer);
+                    update(roomRef, { state: "guessing" });
+                }
             }, 1000);
         }
     };
