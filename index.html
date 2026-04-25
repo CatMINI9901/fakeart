@@ -1,310 +1,1537 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>だまし絵マスター - 匿名サークル＆BAN機能版</title>
-    <style>
-        :root { --primary: #FF6B6B; --secondary: #4ECDC4; --accent: #FFE66D; --dark: #2C3E50; --light: #F7FFF7; --bg: #E8F8F5; }
-        body { font-family: 'Hiragino Maru Gothic ProN', sans-serif; background-color: var(--bg); color: var(--dark); margin: 0; padding: 0; display: flex; justify-content: center; min-height: 100vh; }
-        .app-container { width: 100%; max-width: 600px; background: var(--light); min-height: 100vh; box-shadow: 0 0 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        .screen { display: none; flex-direction: column; align-items: center; padding: 20px; flex-grow: 1; box-sizing: border-box; width: 100%; }
-        .screen.active { display: flex; }
-        h1 { color: var(--primary); font-size: 2em; text-align: center; text-shadow: 2px 2px 0px var(--accent); margin: 10px 0; }
-        button { background-color: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 30px; font-size: 1.1em; font-weight: bold; cursor: pointer; box-shadow: 0 5px 0 #C0392B; margin: 10px; width: 85%; transition: 0.1s; }
-        button:active { transform: translateY(3px); box-shadow: 0 2px 0 #C0392B; }
-        button:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
-        .btn-ban { background: #e74c3c; box-shadow: 0 3px 0 #c0392b; font-size: 0.7em; padding: 5px 10px; width: auto; margin-left: 10px; }
-        input[type="text"] { width: 85%; padding: 12px; font-size: 1.1em; border: 3px solid #ddd; border-radius: 10px; text-align: center; margin-bottom: 10px; }
-        .canvas-container { width: 100%; background: white; border: 4px solid var(--dark); border-radius: 15px; overflow: hidden; position: relative; aspect-ratio: 4 / 3; touch-action: none; }
-        canvas { display: block; width: 100%; height: 100%; }
-        #canvas-blocker { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 100; background: rgba(255,255,255,0); }
-        .player-list { width: 100%; list-style: none; padding: 0; }
-        .player-item { background: white; margin: 5px 0; padding: 10px; border-radius: 10px; border: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
-        .status-bar { width: 100%; background: var(--dark); color: white; padding: 10px; display: flex; justify-content: space-between; font-size: 0.9em; box-sizing: border-box; }
-        .result-image { width: 100%; max-width: 400px; border: 4px solid var(--dark); border-radius: 10px; margin-top: 10px; }
-        #answers-log { width: 100%; background: white; padding: 10px; border-radius: 10px; margin: 15px 0; border: 1px solid #ddd; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>炎上SNS Pro Max - Simulator</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --soft: #f7f9f9;
+      --soft-2: #eef3f5;
+      --txt: #0f1419;
+      --txt-mute: #536471;
+      --border: #eff3f4;
+      --blue: #1d9bf0;
+      --red: #f4212e;
+      --orange: #ff7a00;
+      --green: #00a86b;
+      --purple: #7c3aed;
+      --shadow: 0 18px 60px rgba(15, 20, 25, .12);
+      --radius: 18px;
+      --danger-bg: rgba(244, 33, 46, 0);
+    }
+
+    [data-theme="dark"] {
+      --bg: #000000;
+      --panel: #050505;
+      --soft: #16181c;
+      --soft-2: #202327;
+      --txt: #e7e9ea;
+      --txt-mute: #8b98a5;
+      --border: #2f3336;
+      --shadow: 0 18px 60px rgba(0, 0, 0, .5);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      color: var(--txt);
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    ::selection { background: rgba(29,155,240,.25); }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: var(--danger-bg);
+      z-index: 1200;
+      transition: background .8s ease;
+    }
+
+    #toast-area {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 3000;
+      display: grid;
+      gap: 10px;
+      width: min(360px, calc(100vw - 36px));
+    }
+    .toast {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: 16px;
+      padding: 12px 14px;
+      animation: toastIn .25s ease both;
+      font-size: 14px;
+    }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } }
+
+    #login-screen {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 10% 10%, rgba(244,33,46,.12), transparent 32%),
+        radial-gradient(circle at 90% 20%, rgba(29,155,240,.12), transparent 30%),
+        var(--bg);
+      z-index: 2500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-box {
+      width: min(480px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: 28px;
+      padding: 28px;
+    }
+    .login-logo {
+      width: 64px;
+      height: 64px;
+      border-radius: 20px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--red), #ff9a3d);
+      color: white;
+      font-size: 30px;
+      margin-bottom: 18px;
+    }
+    .login-box h1 { font-size: 30px; letter-spacing: -.04em; margin-bottom: 8px; }
+    .login-box p { color: var(--txt-mute); line-height: 1.7; font-size: 14px; margin-bottom: 20px; }
+    .login-grid { display: grid; gap: 12px; }
+    .login-input, .login-select {
+      width: 100%;
+      padding: 14px 15px;
+      background: var(--bg);
+      color: var(--txt);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      outline: none;
+    }
+    .login-input:focus, .login-select:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(29,155,240,.12); }
+    .login-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .primary-btn, .ghost-btn, .danger-btn, .small-btn {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-weight: 800;
+      transition: .18s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .primary-btn { background: var(--txt); color: var(--bg); }
+    .ghost-btn { background: var(--soft); color: var(--txt); border: 1px solid var(--border); }
+    .danger-btn { background: var(--red); color: #fff; }
+    .small-btn { padding: 8px 12px; font-size: 13px; background: var(--soft); color: var(--txt); border: 1px solid var(--border); }
+    .primary-btn:hover, .ghost-btn:hover, .danger-btn:hover, .small-btn:hover { transform: translateY(-1px); filter: brightness(.98); }
+    .primary-btn:disabled, .danger-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    #app-view { display: none; }
+    .layout {
+      display: grid;
+      grid-template-columns: 275px minmax(0, 600px) minmax(280px, 1fr);
+      max-width: 1260px;
+      margin: 0 auto;
+      min-height: 100vh;
+    }
+    nav {
+      border-right: 1px solid var(--border);
+      padding: 12px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      background: var(--bg);
+    }
+    main { border-right: 1px solid var(--border); min-width: 0; }
+    aside { padding: 18px; position: sticky; top: 0; height: 100vh; overflow: auto; }
+    .brand {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 28px;
+      color: var(--txt);
+      margin-bottom: 6px;
+    }
+    .nav-item {
+      position: relative;
+      padding: 15px 16px;
+      font-size: 20px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: .18s ease;
+      user-select: none;
+      margin-bottom: 4px;
+    }
+    .nav-item:hover, .nav-item.active { background: var(--soft); }
+    .nav-item.active { font-weight: 900; }
+    .nav-post { width: 92%; margin: 18px 0; }
+    .user-mini {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 999px;
+      background: var(--soft);
+      min-width: 0;
+    }
+    .user-mini-text { min-width: 0; }
+    .truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+    }
+    .header-title { font-weight: 900; font-size: 20px; }
+    .tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border); }
+    .tab {
+      padding: 13px 8px;
+      text-align: center;
+      color: var(--txt-mute);
+      font-weight: 800;
+      font-size: 14px;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+    }
+    .tab.active { color: var(--txt); border-bottom-color: var(--blue); }
+
+    .editor { padding: 16px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; }
+    .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      font-size: 19px;
+      color: #fff;
+      font-weight: 900;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,.05);
+    }
+    .editor-content { flex: 1; min-width: 0; }
+    textarea {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--txt);
+      font-size: 18px;
+      resize: none;
+      min-height: 78px;
+      line-height: 1.55;
+    }
+    .composer-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0 10px;
+      color: var(--txt-mute);
+      font-size: 13px;
+    }
+    .char-count.warn { color: var(--orange); font-weight: 800; }
+    .char-count.danger { color: var(--red); font-weight: 900; }
+    .risk-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--soft);
+      border: 1px solid var(--border);
+      font-weight: 800;
+    }
+    .preview-box {
+      position: relative;
+      margin: 10px 0 12px;
+      display: none;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .preview-box img { width: 100%; display: block; max-height: 360px; object-fit: cover; }
+    .remove-image {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(0,0,0,.7);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      z-index: 7;
+    }
+    .ai-scanning {
+      position: absolute;
+      inset: 0;
+      background: rgba(244, 33, 46, .28);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 900;
+      font-size: clamp(18px, 4vw, 28px);
+      text-shadow: 0 2px 8px rgba(0,0,0,.5);
+      overflow: hidden;
+      z-index: 5;
+      backdrop-filter: blur(2px);
+      letter-spacing: .05em;
+    }
+    .ai-scanning::after {
+      content: "";
+      position: absolute;
+      top: -100%;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(transparent, rgba(255,255,255,.75), transparent);
+      animation: scan 1.4s infinite linear;
+    }
+    @keyframes scan { to { top: 100%; } }
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+    .left-controls { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+    .icon-btn {
+      color: var(--blue);
+      font-size: 18px;
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      transition: .18s ease;
+      background: transparent;
+      border: 0;
+    }
+    .icon-btn:hover { background: rgba(29,155,240,.1); }
+    .post-options { display: flex; align-items: center; gap: 8px; }
+    .select-mini {
+      border: 1px solid var(--border);
+      background: var(--soft);
+      color: var(--txt);
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 800;
+      outline: none;
+    }
+
+    .feed-tools {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      flex-wrap: wrap;
+    }
+    .search-box {
+      flex: 1;
+      min-width: 170px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 13px;
+      border-radius: 999px;
+      background: var(--soft);
+      border: 1px solid var(--border);
+      color: var(--txt-mute);
+    }
+    .search-box input {
+      border: 0;
+      outline: 0;
+      width: 100%;
+      background: transparent;
+      color: var(--txt);
+    }
+
+    .empty-state {
+      padding: 42px 24px;
+      text-align: center;
+      color: var(--txt-mute);
+      border-bottom: 1px solid var(--border);
+    }
+    .tweet {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 12px;
+      animation: slideIn .28s ease both;
+      transition: background .2s ease, opacity .2s ease;
+      position: relative;
+    }
+    .tweet.reply { background: rgba(244, 33, 46, .025); }
+    .tweet.pinned { background: color-mix(in srgb, var(--blue) 8%, transparent); }
+    .tweet.hidden { opacity: .42; filter: grayscale(.3); }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(12px); } }
+    .tweet-main { flex: 1; min-width: 0; }
+    .tweet-user {
+      font-weight: 900;
+      font-size: 15px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tweet-user span { font-weight: 500; color: var(--txt-mute); }
+    .bot-badge, .tag-pill {
+      font-size: 11px;
+      background: var(--soft-2);
+      padding: 2px 7px;
+      border-radius: 999px;
+      color: var(--txt-mute);
+      white-space: nowrap;
+    }
+    .severity {
+      color: #fff;
+      font-weight: 900;
+    }
+    .severity.s1 { background: #10b981; }
+    .severity.s2 { background: #f59e0b; }
+    .severity.s3 { background: #ef4444; }
+    .severity.s4 { background: #7c2d12; }
+    .bot-bio {
+      font-size: 13px;
+      color: var(--txt-mute);
+      margin-bottom: 8px;
+      font-style: italic;
+      border-left: 3px solid var(--border);
+      padding-left: 8px;
+    }
+    .tweet-text {
+      font-size: 15px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .tweet-img {
+      width: 100%;
+      border-radius: 16px;
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      max-height: 420px;
+      object-fit: cover;
+      display: block;
+    }
+    .quote-box {
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+      color: var(--txt-mute);
+      font-size: 13px;
+      background: color-mix(in srgb, var(--soft) 70%, transparent);
+    }
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      color: var(--txt-mute);
+      font-size: 13px;
+      max-width: 460px;
+      gap: 8px;
+      user-select: none;
+    }
+    .action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 8px;
+      cursor: pointer;
+    }
+    .action:hover { background: var(--soft); color: var(--blue); }
+    .action.liked { color: var(--red); }
+    .action.reported { color: var(--orange); }
+    .tweet-menu {
+      margin-left: auto;
+      border: 0;
+      background: transparent;
+      color: var(--txt-mute);
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+    }
+    .tweet-menu:hover { background: var(--soft); color: var(--txt); }
+
+    .card {
+      background: var(--soft);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 14px;
+      border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+    }
+    .card h3 { font-size: 18px; margin-bottom: 12px; letter-spacing: -.02em; }
+    .profile-card-top { display: flex; align-items: center; gap: 12px; }
+    .meter-box { margin-top: 12px; }
+    .meter { height: 10px; background: var(--soft-2); border-radius: 999px; overflow: hidden; }
+    .fill { height: 100%; width: 0; transition: .6s ease-out; background: linear-gradient(90deg, var(--green), #f59e0b, var(--red)); }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+    .stat {
+      background: color-mix(in srgb, var(--bg) 55%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px;
+      text-align: center;
+    }
+    .stat b { display: block; font-size: 18px; }
+    .stat span { font-size: 11px; color: var(--txt-mute); }
+    .tag { color: var(--blue); font-size: 14px; margin-top: 8px; display: inline-block; }
+    .trend { padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .trend:last-child { border-bottom: 0; }
+    .trend small { color: var(--txt-mute); }
+    .trend b { display: block; margin: 2px 0; }
+    .log-list, .achieve-list { display: grid; gap: 8px; max-height: 250px; overflow: auto; }
+    .log-item, .achieve-item {
+      padding: 9px 10px;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg) 60%, transparent);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .achieve-item.locked { opacity: .45; }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .toggle-row:last-child { border-bottom: 0; }
+    .switch {
+      width: 46px;
+      height: 26px;
+      border-radius: 999px;
+      background: var(--soft-2);
+      border: 1px solid var(--border);
+      position: relative;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .switch::after {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 2px;
+      top: 2px;
+      background: var(--txt-mute);
+      border-radius: 50%;
+      transition: .18s ease;
+    }
+    .switch.on { background: rgba(29,155,240,.25); border-color: rgba(29,155,240,.5); }
+    .switch.on::after { left: 21px; background: var(--blue); }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 2400;
+    }
+    .modal {
+      width: min(560px, 100%);
+      max-height: min(760px, 90vh);
+      overflow: auto;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      background: var(--panel);
+      padding: 18px;
+      animation: modalIn .18s ease both;
+    }
+    @keyframes modalIn { from { opacity: 0; transform: scale(.98) translateY(8px); } }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .modal-head h2 { font-size: 20px; }
+    .close-btn {
+      border: 0;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--soft);
+      color: var(--txt);
+    }
+    .analysis-grid { display: grid; gap: 10px; }
+    .analysis-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 12px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--soft);
+    }
+    .analysis-row strong { font-size: 13px; color: var(--txt-mute); }
+    .badge-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: var(--soft-2);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .floating-panic {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 1001;
+      display: none;
+      box-shadow: var(--shadow);
+    }
+
+    @media (max-width: 1040px) {
+      .layout { grid-template-columns: 88px minmax(0, 620px); }
+      aside { display: none; }
+      .nav-item span, .nav-post span, .user-mini-text { display: none; }
+      .nav-post { width: 54px; height: 54px; padding: 0; }
+      nav { width: 88px; }
+      .user-mini { justify-content: center; }
+    }
+    @media (max-width: 680px) {
+      .layout { display: block; }
+      nav {
+        position: fixed;
+        bottom: 0;
+        top: auto;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 62px;
+        z-index: 1000;
+        border-right: 0;
+        border-top: 1px solid var(--border);
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        padding: 4px;
+      }
+      .brand, .nav-post, .user-mini { display: none; }
+      .nav-item { justify-content: center; margin: 0; padding: 10px; font-size: 19px; }
+      .nav-item span { display: none; }
+      main { border-right: 0; padding-bottom: 72px; }
+      .tabs { grid-template-columns: repeat(2, 1fr); }
+      .tab { font-size: 13px; }
+      .post-options { flex-wrap: wrap; justify-content: flex-end; }
+      .analysis-row { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
 </head>
-<body>
+<body data-theme="light">
+  <div id="overlay"></div>
+  <div id="toast-area"></div>
 
-<div class="app-container">
-    <div id="screen-title" class="screen active">
-        <h1>だまし絵マスター</h1>
-        <input type="text" id="my-name" placeholder="なまえを入力" maxlength="10">
-        <button onclick="enterCircle()" style="background: var(--accent); color: var(--dark); box-shadow: 0 5px 0 #D4AC0D;">匿名サークルに入る</button>
-        <div style="margin: 10px 0; color: #999;">または</div>
-        <input type="text" id="join-room-id" placeholder="合言葉を入力" style="text-transform: uppercase;">
-        <button onclick="joinRoom()" style="background: var(--secondary); box-shadow: 0 5px 0 #16A085;">部屋に入る</button>
-        <button onclick="createRoom()" style="background: #999; font-size: 0.8em; box-shadow: 0 4px 0 #666;">自分で部屋を作る</button>
+  <section id="login-screen">
+    <div class="login-box">
+      <div class="login-logo"><i class="fa-solid fa-dumpster-fire"></i></div>
+      <h1>炎上SNS Pro Max</h1>
+      <p>投稿するとAIユーザーが文脈を勝手に深読みします。これはネタ用のローカルシミュレーターです。実在の人物や集団への攻撃には使わないでください。</p>
+      <div class="login-grid">
+        <input type="text" id="login-name" class="login-input" maxlength="24" placeholder="表示名 例: 意識高い系タロウ">
+        <input type="text" id="login-id" class="login-input" maxlength="24" placeholder="ユーザーID 例: taro_ceo">
+        <select id="login-risk" class="login-select">
+          <option value="normal">通常モード</option>
+          <option value="chaos">過剰反応モード</option>
+          <option value="gentle">稀に褒めるモード</option>
+        </select>
+      </div>
+      <div class="login-actions">
+        <button class="ghost-btn" id="demo-login"><i class="fa-solid fa-wand-magic-sparkles"></i>デモで入る</button>
+        <button class="primary-btn" id="login-exec"><i class="fa-solid fa-right-to-bracket"></i>ログイン</button>
+      </div>
     </div>
+  </section>
 
-    <div id="screen-lobby" class="screen">
-        <h2 id="lobby-title">待合室</h2>
-        <ul class="player-list" id="lobby-players"></ul>
-        <button id="btn-start-game" onclick="startGame()" style="display: none;">ゲーム開始！</button>
-        <p id="waiting-host-msg">ホストの開始を待っています...</p>
+  <section id="app-view">
+    <div class="layout">
+      <nav>
+        <div class="brand"><i class="fa-brands fa-x-twitter"></i></div>
+        <div class="nav-item active" data-panel="home"><i class="fa-solid fa-house"></i><span>ホーム</span></div>
+        <div class="nav-item" data-panel="search"><i class="fa-solid fa-magnifying-glass"></i><span>話題を検索</span></div>
+        <div class="nav-item" data-panel="notifications"><i class="fa-regular fa-bell"></i><span>通知</span><span id="notif-dot" style="display:none;position:absolute;top:11px;left:31px;width:10px;height:10px;background:var(--red);border-radius:50%;"></span></div>
+        <div class="nav-item" data-panel="profile"><i class="fa-regular fa-user"></i><span>プロフィール</span></div>
+        <div class="nav-item" data-panel="settings"><i class="fa-solid fa-sliders"></i><span>設定</span></div>
+        <button class="primary-btn nav-post" id="nav-post"><i class="fa-solid fa-feather"></i><span>ポスト</span></button>
+        <div class="user-mini">
+          <div class="avatar" id="mini-avatar" style="width:38px;height:38px;background:#1d9bf0;"></div>
+          <div class="user-mini-text">
+            <div class="truncate" id="mini-name" style="font-weight:900;"></div>
+            <div class="truncate" id="mini-id" style="font-size:12px;color:var(--txt-mute);"></div>
+          </div>
+        </div>
+      </nav>
+
+      <main>
+        <div class="header">
+          <div class="header-top">
+            <div>
+              <div class="header-title" id="page-title">おすすめ</div>
+              <div style="font-size:12px;color:var(--txt-mute);margin-top:2px;" id="page-subtitle">炎上しそうな投稿ほど伸びます</div>
+            </div>
+            <button class="small-btn" id="open-analysis"><i class="fa-solid fa-chart-line"></i>分析</button>
+          </div>
+          <div class="tabs" id="tabs">
+            <div class="tab active" data-filter="all">すべて</div>
+            <div class="tab" data-filter="reply">AI反応</div>
+            <div class="tab" data-filter="mine">自分</div>
+            <div class="tab" data-filter="hot">炎上順</div>
+          </div>
+        </div>
+
+        <section class="editor" id="composer">
+          <div class="avatar" id="my-avatar" style="background:#1d9bf0;"></div>
+          <div class="editor-content">
+            <textarea id="post-input" maxlength="420" placeholder="何を投稿しても、誰かが文脈を誤読します。"></textarea>
+            <div class="composer-meta">
+              <span class="risk-chip" id="live-risk"><i class="fa-solid fa-shield-halved"></i>危険度 0%</span>
+              <span class="char-count" id="char-count">0 / 420</span>
+            </div>
+            <div class="preview-box" id="preview-box">
+              <img id="prev-img" alt="画像プレビュー">
+              <button class="remove-image" id="remove-image" title="画像を削除"><i class="fa-solid fa-xmark"></i></button>
+              <div class="ai-scanning" id="ai-scanning">CONTEXT SCANNING...</div>
+            </div>
+            <div class="controls">
+              <div class="left-controls">
+                <label class="icon-btn" title="画像を追加"><i class="fa-regular fa-image"></i><input type="file" id="img-input" hidden accept="image/*"></label>
+                <button class="icon-btn" id="add-sample" title="例文を入れる"><i class="fa-solid fa-dice"></i></button>
+                <button class="icon-btn" id="clear-composer" title="入力を消す"><i class="fa-regular fa-trash-can"></i></button>
+              </div>
+              <div class="post-options">
+                <select class="select-mini" id="reply-volume">
+                  <option value="low">反応 少</option>
+                  <option value="mid" selected>反応 中</option>
+                  <option value="high">反応 多</option>
+                </select>
+                <button class="danger-btn" id="submit"><i class="fa-solid fa-fire"></i>ポストする</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="feed-tools">
+          <label class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input id="feed-search" placeholder="投稿・AI反応を検索"></label>
+          <button class="small-btn" id="sort-new">新着</button>
+          <button class="small-btn" id="sort-risk">危険順</button>
+        </section>
+
+        <div id="empty-state" class="empty-state">
+          <h2 style="font-size:20px;margin-bottom:8px;color:var(--txt);">まだ何も起きていません</h2>
+          <p>投稿すると、AIアカウントが過剰解釈・指摘・稀に称賛します。</p>
+        </div>
+        <section id="timeline"></section>
+      </main>
+
+      <aside>
+        <div class="card" id="user-profile"></div>
+        <div class="card">
+          <h3>炎上アナリティクス</h3>
+          <div style="font-size:13px;color:var(--txt-mute);">AIによる批判判定ゲージ</div>
+          <div class="meter-box">
+            <div class="meter"><div class="fill" id="meter-fill"></div></div>
+            <div id="status-msg" style="font-size:14px;font-weight:900;margin-top:8px;">ステータス: 平和</div>
+          </div>
+          <div id="detected-genre" class="tag" style="display:none;"></div>
+          <div class="stat-grid">
+            <div class="stat"><b id="stat-posts">0</b><span>投稿</span></div>
+            <div class="stat"><b id="stat-replies">0</b><span>AI反応</span></div>
+            <div class="stat"><b id="stat-score">0</b><span>燃料</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>現在のトレンド</h3>
+          <div id="trend-list"></div>
+        </div>
+        <div class="card">
+          <h3>通知ログ</h3>
+          <div class="log-list" id="log-list"></div>
+        </div>
+        <div class="card">
+          <h3>設定</h3>
+          <div class="toggle-row"><span>ダークモード</span><span class="switch" id="theme-switch"></span></div>
+          <div class="toggle-row"><span>自動スクロール</span><span class="switch on" id="scroll-switch"></span></div>
+          <div class="toggle-row"><span>稀に褒める</span><span class="switch on" id="praise-switch"></span></div>
+          <button class="small-btn" id="reset-data" style="width:100%;margin-top:12px;"><i class="fa-solid fa-rotate-left"></i>データリセット</button>
+        </div>
+      </aside>
     </div>
+  </section>
 
-    <div id="screen-prompt" class="screen">
-        <h2 id="round-info">Round 1</h2>
-        <h3 id="turn-player-name">---</h3>
-        <div id="drawer-prompt-view" style="display: none; text-align: center;">
-            <p>あなたへのお題：</p>
-            <div id="secret-prompt" style="font-size: 2.2em; font-weight: bold; background: var(--accent); padding: 15px; border-radius: 15px; margin: 10px 0;"></div>
-            <button onclick="advanceState('drawing')" id="btn-start-drawing">描きはじめる</button>
-        </div>
-        <div id="guesser-prompt-view" style="display: none;"><p>描き手がお題を確認しています...</p></div>
+  <button class="danger-btn floating-panic" id="panic-btn"><i class="fa-solid fa-shield"></i>鎮火モード</button>
+
+  <div class="modal-backdrop" id="analysis-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>投稿分析レポート</h2>
+        <button class="close-btn" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="analysis-grid" id="analysis-content"></div>
     </div>
+  </div>
 
-    <div id="screen-drawing" class="screen" style="padding: 0;">
-        <div class="status-bar">
-            <div id="drawing-status-text">待機中...</div>
-            <div id="drawing-timer" style="color: var(--accent); font-weight: bold; font-size: 1.2em;">60</div>
-        </div>
-        <div class="canvas-container">
-            <canvas id="drawing-canvas" width="600" height="450"></canvas>
-            <div id="canvas-blocker"></div>
-        </div>
-        <div id="drawing-tools" style="display: flex; gap: 15px; margin: 10px;">
-            <div style="background:#000; width:35px; height:35px; border-radius:50%;" onclick="setColor('#000')"></div>
-            <div style="background:#f00; width:35px; height:35px; border-radius:50%;" onclick="setColor('#f00')"></div>
-            <button onclick="clearCanvas()" style="width: auto; padding: 5px 15px; font-size: 0.9em; margin:0;">全消し</button>
-        </div>
-        <button id="btn-finish-drawing" onclick="finishDrawing()">描けた！</button>
+  <div class="modal-backdrop" id="profile-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>プロフィール編集</h2>
+        <button class="close-btn" data-close-modal><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="login-grid">
+        <input type="text" id="edit-name" class="login-input" maxlength="24" placeholder="表示名">
+        <input type="text" id="edit-id" class="login-input" maxlength="24" placeholder="ユーザーID">
+        <input type="text" id="edit-bio" class="login-input" maxlength="80" placeholder="自己紹介">
+        <button class="primary-btn" id="save-profile">保存</button>
+      </div>
     </div>
+  </div>
 
-    <div id="screen-guessing" class="screen">
-        <h2>これ、なーんだ？</h2>
-        <img id="guess-image-display" class="result-image">
-        <div id="guess-input-area" style="width: 100%; text-align: center; margin-top: 15px;">
-            <input type="text" id="guess-input" placeholder="答えを入力">
-            <button onclick="submitGuess()">回答する</button>
-        </div>
-        <div id="guess-wait-msg" style="display:none;"><p>他の人の回答を待っています...</p></div>
-    </div>
+  <script>
+    const BOT_DB = [
+      {
+        name: "マナー警察", handle: "@manner_police_24", color: "#2c3e50", icon: "警",
+        bio: "言葉遣いと空気の乱れを取り締まる自称・公共マナー監視員。",
+        category: "DAILY", severity: 2,
+        prefix: ["あの、失礼ですが、", "冷静に考えて、", "当たり前のこと言いますけど、", "念のため指摘します。"],
+        body: ["その表現が誰かにどう届くか想像しましたか？", "言い方ひとつで印象はかなり変わりますよ。", "不用意に世界へ放流する内容ではない気がします。"],
+        suffix: [" 一度見直したほうがいいです。", " そこは反省点ですね。", " 配慮が足りないです。"]
+      },
+      {
+        name: "論理の番人", handle: "@logical_gatekeeper", color: "#2980b9", icon: "論",
+        bio: "主観と断言の境界線にうるさい。ソースと定義を求めがち。",
+        category: "SOCIETY", severity: 3,
+        prefix: ["根拠はありますか？", "定義が曖昧ですね。", "その結論、飛躍しています。"],
+        body: ["{id}さんの投稿は前提条件が抜けています。", "それは一般化しすぎです。", "感想と事実を分けたほうがいいです。"],
+        suffix: [" もう少し整理してから発信しましょう。", " 議論の土台に乗っていません。", " 検証不足です。"]
+      },
+      {
+        name: "嫉妬ソムリエ", handle: "@anti_glitter_life", color: "#8e44ad", icon: "嫉",
+        bio: "自慢っぽい投稿の香りを0.2秒で検出する。",
+        category: "LUXURY", severity: 3,
+        prefix: ["出ましたね、", "はいはい、", "さりげない自慢に見せかけて、"],
+        body: ["承認欲求の火力が高すぎます。", "その言い回し、かなり見せびらかし感あります。", "読んだ人の気持ちより自己演出が先に来ています。"],
+        suffix: [" 眩しすぎて逆に寒いです。", " これは燃料です。", " タイムラインがざわつきますよ。"]
+      },
+      {
+        name: "労働観モンスター", handle: "@work_ethic_beast", color: "#d35400", icon: "働",
+        bio: "仕事・努力・成長という単語に過剰反応する。",
+        category: "WORK", severity: 2,
+        prefix: ["仕事の話として見ると、", "その温度感で語るなら、", "努力という言葉を使うなら、"],
+        body: ["結果とプロセスの説明が足りません。", "少し自己正当化に寄りすぎています。", "他人に刺さる前に自分に刺さる投稿です。"],
+        suffix: [" まだ燃え始めです。", " そこは慎重に。", " 読み手を選びますね。"]
+      },
+      {
+        name: "言外読み取り師", handle: "@deep_reading_ai", color: "#ef4444", icon: "読",
+        bio: "書いていないことまで勝手に読み取るAI。精度は低い。",
+        category: "ANY", severity: 4,
+        prefix: ["つまりこれは、", "行間を読むと、", "本人は否定するでしょうけど、"],
+        body: ["かなり強い選民意識がにじんでいます。", "見下しのニュアンスを感じる人がいても不思議ではありません。", "無自覚な上から目線として受け取られます。"],
+        suffix: [" これは大きく燃えます。", " スクショされるタイプです。", " もう遅いかもしれません。"]
+      },
+      {
+        name: "誤字脱字監査室", handle: "@typo_audit_room", color: "#0f766e", icon: "字",
+        bio: "内容より誤字・句読点・表記ゆれが気になる。",
+        category: "DAILY", severity: 1,
+        prefix: ["内容以前に、", "細かいですが、", "まず文章として、"],
+        body: ["句読点の置き方がかなり不安定です。", "語尾のテンションが読み手を置いていっています。", "誤読されやすい構文ですね。"],
+        suffix: [" 直すだけで少し鎮火します。", " もったいない。", " 文章の整備が必要です。"]
+      },
+      {
+        name: "逆張り職人", handle: "@contrarian_craft", color: "#64748b", icon: "逆",
+        bio: "どんな投稿にも逆方向から入る。",
+        category: "ANY", severity: 2,
+        prefix: ["みんな怒ってますけど、", "あえて逆に言うと、", "燃えてる理由は分かりますが、"],
+        body: ["これは少しだけ分かる部分もあります。", "言いたいこと自体は完全に間違いではないかもしれません。", "表現を変えれば普通に通った話です。"],
+        suffix: [" ただし言い方が最悪です。", " そこが惜しい。", " だからこそ燃えています。"]
+      },
+      {
+        name: "たまに褒めるAI", handle: "@rare_praise_bot", color: "#16a34a", icon: "褒",
+        bio: "炎上の中に一粒だけ混ざる謎の好意的アカウント。",
+        category: "PRAISE", severity: 0,
+        prefix: ["少数派かもしれませんが、", "正直、", "燃えてるけど、"],
+        body: ["視点としては面白いです。", "この切り口は嫌いじゃないです。", "言葉を整えればかなり良い投稿になりそう。"],
+        suffix: [" もったいない燃え方ですね。", " そこだけは評価します。", " 次は表現を磨きましょう。"]
+      }
+    ];
 
-    <div id="screen-result" class="screen">
-        <h2>正解は「<span id="result-prompt" style="color: var(--primary);"></span>」</h2>
-        <img id="result-image-display-2" class="result-image">
-        <div id="answers-log">
-            <h3 style="margin: 0 0 10px 0; font-size: 1em;">みんなの回答</h3>
-            <ul id="answers-list" style="padding:0; list-style:none;"></ul>
-        </div>
-        <button id="btn-next-round" onclick="nextRound()" style="display: none;">次のラウンドへ</button>
-        <p id="wait-next-msg">ホストの操作を待っています...</p>
-    </div>
-</div>
+    const SAMPLE_POSTS = [
+      "今日は少し高いランチを食べた。たまにはこういう日があってもいい。",
+      "努力は大事だけど、休むのも仕事のうちだと思う。",
+      "ニュースを見て、社会の仕組みって本当に難しいなと思った。",
+      "新しい服を買った。自分に似合ってる気がする。",
+      "正直、ネットの空気読み文化って少し疲れる。",
+      "自分の意見を言うだけで怒られる時代、難しすぎる。"
+    ];
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import { getDatabase, ref, set, onValue, update, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+    const TREND_BASE = [
+      ["日本のトレンド", "#特定班", "84,102 posts"],
+      ["AI・トレンド", "過剰反応AI", "31,440 posts"],
+      ["生活", "言い方が9割", "18,009 posts"],
+      ["炎上中", "スクショ保存", "12,987 posts"],
+      ["テック", "文脈解析ミス", "8,220 posts"]
+    ];
 
-   // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-    const firebaseConfig = {
-      apiKey: "AIzaSyACEPLiM3hhj2uQoxg-kJt1RF2zmfE6Uqg",
-      authDomain: "basashi-c1588.firebaseapp.com",
-      databaseURL: "https://basashi-c1588-default-rtdb.firebaseio.com",
-      projectId: "basashi-c1588",
-      storageBucket: "basashi-c1588.firebasestorage.app",
-      messagingSenderId: "622463342057",
-      appId: "1:622463342057:web:c39e37aa232c30187ce778",
-      measurementId: "G-S08L2GVZPV"
+    const ACHIEVEMENTS = [
+      { id: "first", name: "初火種", desc: "最初の投稿をする", unlocked: false },
+      { id: "tenReplies", name: "通知欄崩壊", desc: "AI反応が10件を超える", unlocked: false },
+      { id: "hot", name: "大炎上", desc: "炎上度80%到達", unlocked: false },
+      { id: "image", name: "画像文脈事故", desc: "画像付き投稿をする", unlocked: false },
+      { id: "panic", name: "鎮火成功", desc: "鎮火モードを使う", unlocked: false }
+    ];
+
+    const state = {
+      user: { name: "", id: "", bio: "どんな投稿もAIに深読みされます。" },
+      posts: [],
+      logs: [],
+      achievements: JSON.parse(JSON.stringify(ACHIEVEMENTS)),
+      bad: 0,
+      score: 0,
+      hasImage: false,
+      imgSrc: "",
+      currentFilter: "all",
+      sort: "new",
+      search: "",
+      mode: "normal",
+      settings: { dark: false, autoScroll: true, praise: true },
+      activeTimers: []
     };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    const $ = (id) => document.getElementById(id);
+    const loginScreen = $("login-screen");
+    const appView = $("app-view");
+    const postInput = $("post-input");
+    const imgInput = $("img-input");
+    const previewBox = $("preview-box");
+    const prevImg = $("prev-img");
+    const aiScanning = $("ai-scanning");
+    const timeline = $("timeline");
+    const emptyState = $("empty-state");
 
-    let myUid = localStorage.getItem('damashie_uid') || Math.random().toString(36).substring(2, 10);
-    localStorage.setItem('damashie_uid', myUid);
-    let myName = "", roomId = "", isHost = false, roomRef = null, roomState = {};
-    const PROMPT_LIST = ["ねこ", "かさ", "ピザ", "かき氷", "にわとり", "ドーナツ", "めがね", "ロケット", "パンダ", "さくらんぼ", "おにぎり"];
-
-    const canvas = document.getElementById('drawing-canvas');
-    const ctx = canvas.getContext('2d');
-    let isDrawing = false, currentColor = '#000';
-
-    function switchScreen(id) {
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
+    function saveLocal() {
+      const payload = {
+        user: state.user,
+        posts: state.posts.slice(0, 120),
+        logs: state.logs.slice(0, 80),
+        achievements: state.achievements,
+        bad: state.bad,
+        score: state.score,
+        mode: state.mode,
+        settings: state.settings
+      };
+      localStorage.setItem("enjou-sns-pro-max", JSON.stringify(payload));
     }
 
-    // --- 部屋管理 ---
-    window.enterCircle = () => { roomId = "PUBLIC"; joinOrCreate(); };
-    window.createRoom = () => { roomId = Math.random().toString(36).substring(2, 6).toUpperCase(); joinOrCreate(true); };
-    window.joinRoom = () => { roomId = document.getElementById('join-room-id').value.toUpperCase(); joinOrCreate(); };
+    function loadLocal() {
+      const raw = localStorage.getItem("enjou-sns-pro-max");
+      if (!raw) return false;
+      try {
+        const data = JSON.parse(raw);
+        Object.assign(state.user, data.user || {});
+        state.posts = data.posts || [];
+        state.logs = data.logs || [];
+        state.achievements = data.achievements || JSON.parse(JSON.stringify(ACHIEVEMENTS));
+        state.bad = data.bad || 0;
+        state.score = data.score || 0;
+        state.mode = data.mode || "normal";
+        state.settings = data.settings || state.settings;
+        return !!state.user.name;
+      } catch { return false; }
+    }
 
-    async function joinOrCreate(forceHost = false) {
-        myName = document.getElementById('my-name').value || "ゲスト";
-        roomRef = ref(db, `rooms/${roomId}`);
-        const snap = await get(roomRef);
-        
-        if (!snap.exists() || forceHost) {
-            isHost = true;
-            await set(roomRef, {
-                state: "lobby", hostUid: myUid, round: 1, drawerIndex: 0,
-                players: { [myUid]: { name: myName, score: 0, order: Date.now() } }
-            });
-        } else {
-            if (snap.val().banList && snap.val().banList[myUid]) return alert("BANされています");
-            await update(child(roomRef, 'players'), { [myUid]: { name: myName, score: 0, order: Date.now() } });
+    function escapeHTML(str = "") {
+      return String(str).replace(/[&<>'"]/g, tag => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;" }[tag]));
+    }
+
+    function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+    function nowLabel() {
+      const d = new Date();
+      return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    }
+    function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+    function toast(text) {
+      const el = document.createElement("div");
+      el.className = "toast";
+      el.textContent = text;
+      $("toast-area").appendChild(el);
+      setTimeout(() => el.remove(), 3200);
+    }
+
+    function addLog(text) {
+      state.logs.unshift({ id: uid(), text, time: nowLabel() });
+      state.logs = state.logs.slice(0, 80);
+      $("notif-dot").style.display = "block";
+      renderLogs();
+      saveLocal();
+    }
+
+    function unlock(id) {
+      const item = state.achievements.find(a => a.id === id);
+      if (!item || item.unlocked) return;
+      item.unlocked = true;
+      toast(`実績解除: ${item.name}`);
+      addLog(`実績「${item.name}」を解除しました。`);
+    }
+
+    function calcRisk(text, hasImage = state.hasImage) {
+      const t = text || "";
+      let risk = 0;
+      const hits = [];
+      const rules = [
+        { re: /仕事|キャリア|努力|成功|残業|ビジネス|起業|成長/g, add: 16, label: "仕事・努力" },
+        { re: /金|ブランド|高い|買った|ホテル|贅沢|ランチ|最高|旅行/g, add: 18, label: "自慢判定" },
+        { re: /政治|日本|税金|政府|ニュース|権利|社会|法律/g, add: 22, label: "社会論点" },
+        { re: /正直|普通に|みんな|絶対|ありえない|意味ない|時代/g, add: 13, label: "断言" },
+        { re: /疲れる|嫌い|無理|だるい|最悪|おかしい/g, add: 12, label: "否定語" }
+      ];
+      for (const rule of rules) {
+        const found = t.match(rule.re);
+        if (found) {
+          risk += rule.add + Math.min(12, found.length * 3);
+          hits.push(rule.label);
         }
-        initListener();
+      }
+      risk += Math.min(22, Math.floor(t.length / 18));
+      if (hasImage) { risk += 18; hits.push("画像文脈"); }
+      if (state.mode === "chaos") risk += 18;
+      if (state.mode === "gentle") risk -= 10;
+      return { risk: Math.max(0, Math.min(100, risk)), hits: [...new Set(hits)] };
     }
 
-    window.banPlayer = (uid) => {
-        if (confirm("この人を追放しますか？")) {
-            update(child(roomRef, 'banList'), { [uid]: true });
-            remove(child(roomRef, `players/${uid}`));
+    function analyzeContext(text) {
+      const scores = { WORK: 0, LUXURY: 0, SOCIETY: 0, DAILY: 1 };
+      const add = (key, re, pt) => { const m = text.match(re); if (m) scores[key] += m.length * pt; };
+      add("WORK", /仕事|キャリア|努力|成功|残業|ビジネス|起業|成長/g, 3);
+      add("LUXURY", /金|ブランド|高い|買った|ホテル|贅沢|ランチ|最高|旅行|服/g, 3);
+      add("SOCIETY", /政治|日本|税金|政府|ニュース|権利|社会|法律|時代/g, 3);
+      return Object.entries(scores).sort((a,b) => b[1] - a[1])[0][0];
+    }
+
+    function categoryLabel(cat) {
+      return ({ WORK: "仕事・努力", LUXURY: "自慢・消費", SOCIETY: "社会・ニュース", DAILY: "日常", ANY: "過剰解釈", PRAISE: "称賛" })[cat] || cat;
+    }
+
+    function createReply(bot, original, hasImage, userData) {
+      let reply = "";
+      if (hasImage && Math.random() > 0.45) {
+        reply += rand([
+          "画像の文脈が本文と噛み合っていません。\n",
+          "その写真、情報量が多すぎて誤解を招きます。\n",
+          "背景まで含めて投稿として読まれる時代ですよ。\n",
+          "画像付きにしたことで燃料が増えています。\n"
+        ]);
+      }
+      if (original.length < 12 && Math.random() > 0.55) {
+        reply += "短文すぎて逆に含みを感じます。";
+      }
+      reply += rand(bot.prefix) + rand(bot.body) + rand(bot.suffix);
+      return reply.replace(/{name}/g, userData.name).replace(/{id}/g, userData.id);
+    }
+
+    function severityClass(n) {
+      if (n >= 4) return "s4";
+      if (n >= 3) return "s3";
+      if (n >= 2) return "s2";
+      return "s1";
+    }
+
+    function renderTweet(post) {
+      const div = document.createElement("article");
+      div.className = `tweet ${post.isReply ? "reply" : ""} ${post.pinned ? "pinned" : ""} ${post.hidden ? "hidden" : ""}`;
+      div.dataset.id = post.id;
+      const name = escapeHTML(post.name);
+      const handle = escapeHTML(post.handle);
+      const text = escapeHTML(post.text);
+      const bio = escapeHTML(post.bio || "");
+      const icon = escapeHTML(post.icon || name[0] || "炎");
+      const quote = post.quote ? `<div class="quote-box"><b>引用元:</b> ${escapeHTML(post.quote)}</div>` : "";
+      const image = post.imgSrc ? `<img class="tweet-img" src="${post.imgSrc}" alt="投稿画像">` : "";
+      const badge = post.isReply ? `<span class="bot-badge">Verified AI</span><span class="tag-pill severity ${severityClass(post.severity)}">Lv.${post.severity}</span>` : `<span class="tag-pill">${categoryLabel(post.category)}</span>`;
+      div.innerHTML = `
+        <div class="avatar" style="background:${post.color}">${icon}</div>
+        <div class="tweet-main">
+          <div class="tweet-user">
+            <span class="truncate" style="color:var(--txt);font-weight:900;">${name}</span>
+            <span>${handle} · ${post.time}</span>
+            ${badge}
+            <button class="tweet-menu" data-action="menu" title="メニュー"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          ${post.isReply && bio ? `<div class="bot-bio">${bio}</div>` : ""}
+          <div class="tweet-text">${text}</div>
+          ${image}
+          ${quote}
+          <div class="footer">
+            <span class="action" data-action="reply"><i class="fa-regular fa-comment"></i><span>${post.comments}</span></span>
+            <span class="action" data-action="retweet"><i class="fa-solid fa-retweet"></i><span>${post.retweets}</span></span>
+            <span class="action ${post.liked ? "liked" : ""}" data-action="like"><i class="fa-${post.liked ? "solid" : "regular"} fa-heart"></i><span>${post.likes}</span></span>
+            <span class="action ${post.reported ? "reported" : ""}" data-action="report"><i class="fa-regular fa-flag"></i><span>通報</span></span>
+            <span class="action" data-action="hide"><i class="fa-regular fa-eye-slash"></i><span>${post.hidden ? "表示" : "非表示"}</span></span>
+          </div>
+        </div>
+      `;
+      return div;
+    }
+
+    function filteredPosts() {
+      let arr = [...state.posts];
+      const q = state.search.trim().toLowerCase();
+      if (state.currentFilter === "reply") arr = arr.filter(p => p.isReply);
+      if (state.currentFilter === "mine") arr = arr.filter(p => !p.isReply);
+      if (q) arr = arr.filter(p => `${p.name} ${p.handle} ${p.text} ${p.bio || ""}`.toLowerCase().includes(q));
+      if (state.currentFilter === "hot" || state.sort === "risk") arr.sort((a,b) => (b.risk || b.severity * 20) - (a.risk || a.severity * 20));
+      else arr.sort((a,b) => b.created - a.created);
+      return arr;
+    }
+
+    function renderTimeline() {
+      timeline.innerHTML = "";
+      const arr = filteredPosts();
+      emptyState.style.display = arr.length ? "none" : "block";
+      for (const post of arr) timeline.appendChild(renderTweet(post));
+      updateStats();
+    }
+
+    function updateStats() {
+      const val = Math.max(0, Math.min(100, state.bad));
+      $("meter-fill").style.width = `${val}%`;
+      $("stat-posts").textContent = state.posts.filter(p => !p.isReply).length;
+      $("stat-replies").textContent = state.posts.filter(p => p.isReply).length;
+      $("stat-score").textContent = Math.floor(state.score);
+      $("panic-btn").style.display = val > 55 ? "inline-flex" : "none";
+
+      const overlay = $("overlay");
+      const msg = $("status-msg");
+      if (val > 80) {
+        msg.innerHTML = "<span style='color:var(--red)'>大炎上中：通知欄が崩壊しています</span>";
+        overlay.style.background = "rgba(244, 33, 46, .24)";
+        unlock("hot");
+      } else if (val > 45) {
+        msg.innerHTML = "<span style='color:var(--orange)'>警告：複数AIに捕捉されました</span>";
+        overlay.style.background = "rgba(244, 33, 46, .09)";
+      } else if (val > 12) {
+        msg.innerHTML = "<span style='color:var(--blue)'>小火：引用が増えています</span>";
+        overlay.style.background = "rgba(244, 33, 46, .03)";
+      } else {
+        msg.textContent = "ステータス: 平和";
+        overlay.style.background = "rgba(244, 33, 46, 0)";
+      }
+    }
+
+    function renderProfile() {
+      const initial = escapeHTML(state.user.name[0] || "炎");
+      const id = escapeHTML(state.user.id);
+      const name = escapeHTML(state.user.name);
+      $("my-avatar").textContent = initial;
+      $("mini-avatar").textContent = initial;
+      $("mini-name").textContent = state.user.name;
+      $("mini-id").textContent = state.user.id;
+      $("user-profile").innerHTML = `
+        <div class="profile-card-top">
+          <div class="avatar" style="background:#1d9bf0;width:52px;height:52px;">${initial}</div>
+          <div style="min-width:0;flex:1;">
+            <div class="truncate" style="font-weight:900;font-size:17px;">${name}</div>
+            <div class="truncate" style="color:var(--txt-mute);font-size:13px;">${id}</div>
+          </div>
+          <button class="small-btn" id="edit-profile"><i class="fa-regular fa-pen-to-square"></i></button>
+        </div>
+        <p style="font-size:13px;line-height:1.6;color:var(--txt-mute);margin-top:12px;">${escapeHTML(state.user.bio)}</p>
+      `;
+      $("edit-profile").onclick = openProfileModal;
+    }
+
+    function renderTrends() {
+      const extra = state.bad > 60 ? [["緊急", `#${state.user.name}炎上`, `${Math.floor(state.score * 12 + 1000).toLocaleString()} posts`]] : [];
+      $("trend-list").innerHTML = [...extra, ...TREND_BASE].map(t => `
+        <div class="trend"><small>${t[0]}</small><b>${escapeHTML(t[1])}</b><small>${t[2]}</small></div>
+      `).join("");
+    }
+
+    function renderLogs() {
+      const logs = state.logs.slice(0, 18);
+      $("log-list").innerHTML = logs.length ? logs.map(l => `<div class="log-item"><b>${l.time}</b> ${escapeHTML(l.text)}</div>`).join("") : `<div class="log-item">まだ通知はありません。</div>`;
+    }
+
+    function renderAchievements() {
+      return state.achievements.map(a => `<div class="achieve-item ${a.unlocked ? "" : "locked"}"><b>${a.unlocked ? "解除済み" : "未解除"}: ${escapeHTML(a.name)}</b><br>${escapeHTML(a.desc)}</div>`).join("");
+    }
+
+    function applySettingsUI() {
+      document.body.dataset.theme = state.settings.dark ? "dark" : "light";
+      $("theme-switch").classList.toggle("on", state.settings.dark);
+      $("scroll-switch").classList.toggle("on", state.settings.autoScroll);
+      $("praise-switch").classList.toggle("on", state.settings.praise);
+    }
+
+    function startApp() {
+      loginScreen.style.display = "none";
+      appView.style.display = "block";
+      renderProfile();
+      renderTrends();
+      renderLogs();
+      applySettingsUI();
+      renderTimeline();
+      updateLiveRisk();
+    }
+
+    function login(name, id, mode) {
+      state.user.name = name.trim();
+      state.user.id = "@" + id.trim().replace(/^@/, "").replace(/\s/g, "_");
+      state.mode = mode;
+      addLog("アカウントを作成しました。AI監視が開始されました。");
+      saveLocal();
+      startApp();
+    }
+
+    function updateLiveRisk() {
+      const text = postInput.value;
+      const { risk, hits } = calcRisk(text);
+      const chip = $("live-risk");
+      chip.innerHTML = `<i class="fa-solid fa-shield-halved"></i>危険度 ${risk}%${hits.length ? ` / ${hits[0]}` : ""}`;
+      chip.style.color = risk > 70 ? "var(--red)" : risk > 40 ? "var(--orange)" : "var(--txt-mute)";
+      const count = $("char-count");
+      count.textContent = `${text.length} / 420`;
+      count.classList.toggle("warn", text.length > 300);
+      count.classList.toggle("danger", text.length > 390);
+    }
+
+    function resetComposer() {
+      postInput.value = "";
+      state.hasImage = false;
+      state.imgSrc = "";
+      imgInput.value = "";
+      previewBox.style.display = "none";
+      aiScanning.style.display = "none";
+      updateLiveRisk();
+    }
+
+    function addPost(post) {
+      state.posts.unshift(post);
+      state.posts = state.posts.slice(0, 180);
+      renderTimeline();
+      saveLocal();
+    }
+
+    function createOwnPost(text, category, risk) {
+      return {
+        id: uid(), created: Date.now(), time: "今", isReply: false,
+        name: state.user.name, handle: state.user.id, color: "#1d9bf0", icon: state.user.name[0] || "炎",
+        text, bio: "", imgSrc: state.imgSrc, category, risk, severity: Math.ceil(risk / 25),
+        comments: Math.floor(risk / 8), retweets: Math.floor(risk * 2.2), likes: Math.floor(risk * 3.5),
+        liked: false, reported: false, hidden: false, pinned: false
+      };
+    }
+
+    function createBotPost(bot, text, category, risk, quote) {
+      return {
+        id: uid(), created: Date.now(), time: "今", isReply: true,
+        name: bot.name, handle: bot.handle, color: bot.color, icon: bot.icon,
+        text, bio: bot.bio, imgSrc: null, category: bot.category, risk, severity: bot.severity,
+        quote: quote.length > 90 ? quote.slice(0, 90) + "…" : quote,
+        comments: Math.floor(Math.random() * 90 + bot.severity * 10),
+        retweets: Math.floor(Math.random() * 420 + bot.severity * 40),
+        likes: Math.floor(Math.random() * 900 + bot.severity * 55),
+        liked: false, reported: false, hidden: false, pinned: false
+      };
+    }
+
+    function startFlaming(category, originalText, risk) {
+      const volume = $("reply-volume").value;
+      const base = volume === "low" ? 7 : volume === "high" ? 24 : 14;
+      let maxReplies = base + Math.floor(risk / 10);
+      if (state.mode === "chaos") maxReplies += 8;
+      if (state.mode === "gentle") maxReplies -= 4;
+      maxReplies = Math.max(4, Math.min(40, maxReplies));
+
+      let count = 0;
+      addLog(`AIが「${categoryLabel(category)}」として文脈解析しました。`);
+      const tag = $("detected-genre");
+      tag.style.display = "inline-block";
+      tag.innerHTML = `<i class="fa-solid fa-microchip"></i> AI判定ジャンル: <b>${categoryLabel(category)}</b>`;
+
+      const timer = setInterval(() => {
+        const praiseChance = state.settings.praise ? (state.mode === "gentle" ? .26 : .09) : 0;
+        let candidates = BOT_DB.filter(b => b.category === category || b.category === "ANY");
+        if (Math.random() < praiseChance) candidates = BOT_DB.filter(b => b.category === "PRAISE");
+        const bot = rand(candidates);
+        const replyText = createReply(bot, originalText, state.hasImage, state.user);
+        addPost(createBotPost(bot, replyText, category, risk, originalText));
+
+        const add = bot.severity === 0 ? -1.5 : (risk / maxReplies) * (bot.severity / 2.6);
+        state.bad = Math.max(0, Math.min(100, state.bad + add));
+        state.score += Math.max(0, add * 2.4 + bot.severity);
+        count++;
+
+        if (count === 3) addLog("引用ポストが増え始めました。");
+        if (count === 10) unlock("tenReplies");
+        if (state.settings.autoScroll && count % 4 === 0) window.scrollTo({ top: 0, behavior: "smooth" });
+        renderTrends();
+        updateStats();
+        saveLocal();
+        if (count >= maxReplies) {
+          clearInterval(timer);
+          state.activeTimers = state.activeTimers.filter(t => t !== timer);
+          addLog("AI反応の第一波が落ち着きました。まだ油断できません。");
         }
-    };
-
-    function initListener() {
-        onValue(roomRef, (snap) => {
-            const data = snap.val(); if (!data) return;
-            roomState = data;
-            if (data.banList && data.banList[myUid]) { alert("BANされました"); location.reload(); return; }
-            
-            const playerKeys = Object.keys(data.players || {}).sort((a,b) => data.players[a].order - data.players[b].order);
-            const currentDrawerUid = playerKeys[data.drawerIndex];
-            const isMeDrawer = (myUid === currentDrawerUid);
-            isHost = (data.hostUid === myUid);
-
-            if (data.state === "lobby") {
-                switchScreen('screen-lobby');
-                document.getElementById('lobby-title').innerText = (roomId === "PUBLIC") ? "匿名サークル" : `部屋ID: ${roomId}`;
-                document.getElementById('lobby-players').innerHTML = playerKeys.map(k => {
-                    const banBtn = (isHost && k !== myUid) ? `<button class="btn-ban" onclick="banPlayer('${k}')">BAN</button>` : "";
-                    return `<li class="player-item">${data.players[k].name}${banBtn}</li>`;
-                }).join('');
-                document.getElementById('btn-start-game').style.display = isHost ? 'block' : 'none';
-                document.getElementById('waiting-host-msg').style.display = isHost ? 'none' : 'block';
-            }
-
-            if (data.state === "prompt") {
-                switchScreen('screen-prompt');
-                document.getElementById('round-info').innerText = `Round ${data.round}`;
-                document.getElementById('turn-player-name').innerText = `${data.players[currentDrawerUid]?.name}さんの番`;
-                if (isMeDrawer) {
-                    document.getElementById('drawer-prompt-view').style.display = 'block';
-                    document.getElementById('guesser-prompt-view').style.display = 'none';
-                    document.getElementById('secret-prompt').innerText = data.currentPrompt;
-                } else {
-                    document.getElementById('drawer-prompt-view').style.display = 'none';
-                    document.getElementById('guesser-prompt-view').style.display = 'block';
-                }
-            }
-
-            if (data.state === "drawing") {
-                switchScreen('screen-drawing');
-                document.getElementById('drawing-timer').innerText = data.timeLeft;
-                if (isMeDrawer) {
-                    document.getElementById('drawing-tools').style.display = 'flex';
-                    document.getElementById('btn-finish-drawing').style.display = 'block';
-                    document.getElementById('canvas-blocker').style.display = 'none';
-                    document.getElementById('drawing-status-text').innerText = `お題: ${data.currentPrompt}`;
-                } else {
-                    document.getElementById('drawing-tools').style.display = 'none';
-                    document.getElementById('btn-finish-drawing').style.display = 'none';
-                    document.getElementById('canvas-blocker').style.display = 'block';
-                    document.getElementById('drawing-status-text').innerText = `${data.players[currentDrawerUid]?.name}が描き中...`;
-                    if (data.canvasData) {
-                        const img = new Image();
-                        img.onload = () => { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0); };
-                        img.src = data.canvasData;
-                    }
-                }
-            }
-
-            if (data.state === "guessing") {
-                switchScreen('screen-guessing');
-                document.getElementById('guess-image-display').src = data.canvasData;
-                const alreadyGuessed = data.guesses && data.guesses[myUid];
-                document.getElementById('guess-input-area').style.display = (isMeDrawer || alreadyGuessed) ? 'none' : 'block';
-                document.getElementById('guess-wait-msg').style.display = (isMeDrawer || alreadyGuessed) ? 'block' : 'none';
-                if (isHost && data.guesses && Object.keys(data.guesses).length >= playerKeys.length - 1) {
-                    calcResult(data, playerKeys, currentDrawerUid);
-                }
-            }
-
-            if (data.state === "result") {
-                switchScreen('screen-result');
-                document.getElementById('result-prompt').innerText = data.currentPrompt;
-                document.getElementById('result-image-display-2').src = data.canvasData;
-                const gs = data.guesses || {};
-                document.getElementById('answers-list').innerHTML = Object.keys(gs).map(k => `<li>${data.players[k]?.name}: ${gs[k].text} ${gs[k].correct ? "✅" : "❌"}</li>`).join('');
-                document.getElementById('btn-next-round').style.display = isHost ? 'block' : 'none';
-                document.getElementById('wait-next-msg').style.display = isHost ? 'none' : 'block';
-            }
-        });
+      }, Math.max(230, 760 - risk * 4));
+      state.activeTimers.push(timer);
     }
 
-    // --- ゲームアクション ---
-    window.startGame = () => update(roomRef, { state: "prompt", currentPrompt: PROMPT_LIST[Math.floor(Math.random()*PROMPT_LIST.length)] });
-    
-    window.advanceState = (s) => {
-        update(roomRef, { state: s });
-        if (s === "drawing") {
-            ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0,0,canvas.width,canvas.height); syncCanvas();
-            let t = 60;
-            const timer = setInterval(() => {
-                if (roomState.state !== "drawing") { clearInterval(timer); return; }
-                t--; update(roomRef, { timeLeft: t });
-                if (t <= 0) { clearInterval(timer); update(roomRef, { state: "guessing" }); }
-            }, 1000);
+    function submitPost() {
+      const text = postInput.value.trim();
+      if (!text && !state.hasImage) return toast("本文か画像を入れてください。");
+      const analysis = calcRisk(text);
+      const category = analyzeContext(text);
+      const post = createOwnPost(text || "画像だけ投稿", category, analysis.risk);
+      addPost(post);
+      unlock("first");
+      if (state.hasImage) unlock("image");
+      state.bad = Math.min(100, state.bad + Math.max(5, analysis.risk / 6));
+      state.score += analysis.risk;
+
+      $("submit").disabled = true;
+      postInput.disabled = true;
+      imgInput.disabled = true;
+
+      const begin = () => {
+        $("submit").disabled = false;
+        postInput.disabled = false;
+        imgInput.disabled = false;
+        const hadImage = state.hasImage;
+        startFlaming(category, text || "画像だけ投稿", analysis.risk);
+        resetComposer();
+        if (hadImage) previewBox.style.display = "none";
+      };
+
+      if (state.hasImage) {
+        aiScanning.style.display = "flex";
+        setTimeout(() => {
+          aiScanning.style.display = "none";
+          begin();
+        }, 1100);
+      } else {
+        begin();
+      }
+    }
+
+    function openAnalysisModal() {
+      const lastMine = state.posts.find(p => !p.isReply);
+      const text = postInput.value.trim() || (lastMine ? lastMine.text : "");
+      const analysis = calcRisk(text, state.hasImage || !!(lastMine && lastMine.imgSrc));
+      const category = analyzeContext(text);
+      const topBots = BOT_DB.filter(b => b.category === category || b.category === "ANY").slice(0, 4);
+      $("analysis-content").innerHTML = `
+        <div class="analysis-row"><strong>推定ジャンル</strong><div>${categoryLabel(category)}</div></div>
+        <div class="analysis-row"><strong>危険度</strong><div><b style="color:${analysis.risk > 70 ? "var(--red)" : analysis.risk > 40 ? "var(--orange)" : "var(--green)"};">${analysis.risk}%</b></div></div>
+        <div class="analysis-row"><strong>検出要因</strong><div class="badge-list">${analysis.hits.length ? analysis.hits.map(h => `<span class="badge">${escapeHTML(h)}</span>`).join("") : `<span class="badge">低刺激</span>`}</div></div>
+        <div class="analysis-row"><strong>反応候補</strong><div class="badge-list">${topBots.map(b => `<span class="badge">${escapeHTML(b.name)}</span>`).join("")}</div></div>
+        <div class="analysis-row"><strong>改善案</strong><div>${analysis.risk > 60 ? "断言を減らし、主語を狭くし、感想として書くと鎮火しやすいです。" : "今のところ低リスクですが、画像や強い断言を足すと燃えやすくなります。"}</div></div>
+        <div class="analysis-row"><strong>実績</strong><div class="achieve-list">${renderAchievements()}</div></div>
+      `;
+      $("analysis-modal").style.display = "flex";
+    }
+
+    function openProfileModal() {
+      $("edit-name").value = state.user.name;
+      $("edit-id").value = state.user.id.replace(/^@/, "");
+      $("edit-bio").value = state.user.bio;
+      $("profile-modal").style.display = "flex";
+    }
+
+    function closeModals() {
+      document.querySelectorAll(".modal-backdrop").forEach(m => m.style.display = "none");
+    }
+
+    function switchPanel(panel) {
+      document.querySelectorAll(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.panel === panel));
+      const titles = {
+        home: ["おすすめ", "炎上しそうな投稿ほど伸びます"],
+        search: ["話題を検索", "検索欄で投稿とAI反応を絞り込めます"],
+        notifications: ["通知", "右側の通知ログにも反映されます"],
+        profile: ["プロフィール", "自分の投稿だけを見るならタブを切り替え"],
+        settings: ["設定", "ダークモードや自動スクロールを変更できます"]
+      };
+      $("page-title").textContent = titles[panel]?.[0] || "おすすめ";
+      $("page-subtitle").textContent = titles[panel]?.[1] || "";
+      if (panel === "search") $("feed-search").focus();
+      if (panel === "notifications") { $("notif-dot").style.display = "none"; toast("通知ログは右側に表示されています。スマホでは分析から確認できます。"); }
+      if (panel === "profile") { state.currentFilter = "mine"; syncTabs(); renderTimeline(); }
+      if (panel === "settings") toast("設定パネルは右側です。スマホでは画面幅の都合で一部非表示です。上部の分析にも情報があります。");
+    }
+
+    function syncTabs() {
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.filter === state.currentFilter));
+    }
+
+    document.addEventListener("click", (e) => {
+      const close = e.target.closest("[data-close-modal]");
+      if (close || e.target.classList.contains("modal-backdrop")) closeModals();
+
+      const nav = e.target.closest(".nav-item");
+      if (nav && nav.dataset.panel) switchPanel(nav.dataset.panel);
+
+      const tab = e.target.closest(".tab");
+      if (tab) {
+        state.currentFilter = tab.dataset.filter;
+        syncTabs();
+        renderTimeline();
+      }
+
+      const tweet = e.target.closest(".tweet");
+      const action = e.target.closest("[data-action]");
+      if (tweet && action) {
+        const post = state.posts.find(p => p.id === tweet.dataset.id);
+        if (!post) return;
+        const type = action.dataset.action;
+        if (type === "like") { post.liked = !post.liked; post.likes += post.liked ? 1 : -1; }
+        if (type === "retweet") { post.retweets += 1; state.score += 2; toast("リポストしました。燃料が少し増えました。"); }
+        if (type === "reply") { post.comments += 1; postInput.value = `@${post.handle.replace(/^@/, "")} `; postInput.focus(); updateLiveRisk(); }
+        if (type === "report") { post.reported = !post.reported; if (post.reported) { state.bad = Math.max(0, state.bad - 3); addLog("通報により一部の反応が抑制されました。"); } }
+        if (type === "hide") { post.hidden = !post.hidden; }
+        if (type === "menu") {
+          post.pinned = !post.pinned;
+          toast(post.pinned ? "投稿をピン留めしました。" : "ピン留めを解除しました。");
         }
-    };
-
-    window.finishDrawing = () => update(roomRef, { state: "guessing" });
-
-    window.submitGuess = () => {
-        const val = document.getElementById('guess-input').value.trim();
-        if(!val) return;
-        update(child(roomRef, `guesses/${myUid}`), { text: val, correct: (val === roomState.currentPrompt) });
-        document.getElementById('guess-input').value = "";
-    };
-
-    function calcResult(data, keys, drawerUid) {
-        let up = { state: "result" };
-        update(roomRef, up);
-    }
-
-    window.nextRound = () => {
-        const keys = Object.keys(roomState.players).sort((a,b) => roomState.players[a].order - roomState.players[b].order);
-        let next = roomState.drawerIndex + 1;
-        if (next >= keys.length) update(roomRef, { state: "lobby", drawerIndex: 0, guesses: null, canvasData: "" });
-        else update(roomRef, { state: "prompt", drawerIndex: next, round: roomState.round + 1, currentPrompt: PROMPT_LIST[Math.floor(Math.random()*PROMPT_LIST.length)], guesses: null, canvasData: "" });
-    };
-
-    // --- お絵かきロジック ---
-    function syncCanvas() { if(roomState.state === "drawing") update(roomRef, { canvasData: canvas.toDataURL('image/jpeg', 0.5) }); }
-    function getPos(e) {
-        const r = canvas.getBoundingClientRect();
-        const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
-        const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
-        return { x: x * (canvas.width / r.width), y: y * (canvas.height / r.height) };
-    }
-    const startDraw = (e) => {
-        const playerKeys = Object.keys(roomState.players).sort((a,b) => roomState.players[a].order - roomState.players[b].order);
-        if (roomState.state !== "drawing" || myUid !== playerKeys[roomState.drawerIndex]) return;
-        isDrawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y);
-    };
-    canvas.addEventListener('mousedown', startDraw);
-    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e); });
-    window.addEventListener('mousemove', (e) => {
-        if (!isDrawing) return; const p = getPos(e);
-        ctx.lineTo(p.x, p.y); ctx.strokeStyle = currentColor; ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.stroke();
-        if (Math.random() > 0.8) syncCanvas();
+        renderTimeline();
+        saveLocal();
+      }
     });
-    window.addEventListener('touchmove', (e) => {
-        if (!isDrawing) return; const p = getPos(e);
-        ctx.lineTo(p.x, p.y); ctx.strokeStyle = currentColor; ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.stroke();
-        if (Math.random() > 0.8) syncCanvas();
-    }, {passive: false});
-    window.addEventListener('mouseup', () => { if(isDrawing){ isDrawing = false; syncCanvas(); } });
-    window.addEventListener('touchend', () => { if(isDrawing){ isDrawing = false; syncCanvas(); } });
-    window.setColor = (c) => currentColor = c;
-    window.clearCanvas = () => { ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0,0,canvas.width,canvas.height); syncCanvas(); };
-</script>
+
+    $("login-exec").onclick = () => {
+      const name = $("login-name").value.trim();
+      const id = $("login-id").value.trim();
+      if (!name || !id) return toast("名前とIDを入力してください。");
+      login(name, id, $("login-risk").value);
+    };
+    $("demo-login").onclick = () => login("意識高い系タロウ", "taro_ceo", $("login-risk").value);
+    $("submit").onclick = submitPost;
+    $("nav-post").onclick = () => postInput.focus();
+    $("open-analysis").onclick = openAnalysisModal;
+
+    postInput.addEventListener("input", updateLiveRisk);
+    $("add-sample").onclick = () => { postInput.value = rand(SAMPLE_POSTS); updateLiveRisk(); postInput.focus(); };
+    $("clear-composer").onclick = resetComposer;
+    $("remove-image").onclick = () => { state.hasImage = false; state.imgSrc = ""; imgInput.value = ""; previewBox.style.display = "none"; updateLiveRisk(); };
+
+    imgInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) return toast("画像ファイルを選んでください。");
+      const reader = new FileReader();
+      reader.onload = ev => {
+        state.imgSrc = ev.target.result;
+        state.hasImage = true;
+        prevImg.src = state.imgSrc;
+        previewBox.style.display = "block";
+        updateLiveRisk();
+      };
+      reader.readAsDataURL(file);
+    };
+
+    $("feed-search").addEventListener("input", (e) => { state.search = e.target.value; renderTimeline(); });
+    $("sort-new").onclick = () => { state.sort = "new"; renderTimeline(); };
+    $("sort-risk").onclick = () => { state.sort = "risk"; renderTimeline(); };
+    $("theme-switch").onclick = () => { state.settings.dark = !state.settings.dark; applySettingsUI(); saveLocal(); };
+    $("scroll-switch").onclick = () => { state.settings.autoScroll = !state.settings.autoScroll; applySettingsUI(); saveLocal(); };
+    $("praise-switch").onclick = () => { state.settings.praise = !state.settings.praise; applySettingsUI(); saveLocal(); };
+    $("reset-data").onclick = () => {
+      if (!confirm("投稿・通知・実績をリセットしますか？")) return;
+      state.posts = [];
+      state.logs = [];
+      state.achievements = JSON.parse(JSON.stringify(ACHIEVEMENTS));
+      state.bad = 0;
+      state.score = 0;
+      renderTimeline();
+      renderLogs();
+      renderTrends();
+      saveLocal();
+      toast("データをリセットしました。");
+    };
+    $("panic-btn").onclick = () => {
+      state.activeTimers.forEach(clearInterval);
+      state.activeTimers = [];
+      state.bad = Math.max(0, state.bad - 38);
+      unlock("panic");
+      addLog("鎮火モードを実行しました。反応生成を停止しました。");
+      updateStats();
+      saveLocal();
+    };
+    $("save-profile").onclick = () => {
+      const name = $("edit-name").value.trim();
+      const id = $("edit-id").value.trim().replace(/^@/, "");
+      if (!name || !id) return toast("名前とIDは必須です。");
+      state.user.name = name;
+      state.user.id = "@" + id.replace(/\s/g, "_");
+      state.user.bio = $("edit-bio").value.trim() || "どんな投稿もAIに深読みされます。";
+      renderProfile();
+      closeModals();
+      saveLocal();
+      toast("プロフィールを保存しました。");
+    };
+
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submitPost();
+      if (e.key === "Escape") closeModals();
+    });
+
+    if (loadLocal()) {
+      startApp();
+      toast("前回の状態を復元しました。");
+    } else {
+      renderTrends();
+    }
+  </script>
 </body>
 </html>
