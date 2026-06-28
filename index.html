@@ -3,202 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MediaPipe Face Tracking Mobile</title>
+    <title>Synchronous Sphere: Multi-Phase</title>
     <style>
-        /* 全画面リセット */
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            overflow: hidden;
-            font-family: sans-serif;
-        }
-
-        /* 映像コンテナ */
-        .view-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* ビデオとキャンバスを重ねる */
-        video, canvas {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover; /* 画面いっぱいに広げる */
-            transform: scaleX(-1); /* 自撮り用に反転 */
-        }
-
-        /* 操作UI */
-        .ui-panel {
-            position: absolute;
-            bottom: 40px;
-            z-index: 100;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-        }
-
-        button {
-            padding: 16px 32px;
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-            background: rgba(255, 255, 255, 0.9);
-            border: none;
-            border-radius: 50px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-            cursor: pointer;
-            transition: transform 0.1s, background 0.2s;
-        }
-
-        button:active {
-            transform: scale(0.95);
-            background: rgba(255, 255, 255, 1);
-        }
-
-        button:disabled {
-            background: #666;
-            color: #aaa;
-        }
-
-        #status {
-            color: white;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-            font-size: 14px;
-            background: rgba(0,0,0,0.3);
-            padding: 4px 12px;
-            border-radius: 10px;
-        }
+        :root { --bg: #0a0a0c; --accent: #00f2ff; --warn: #ff0055; }
+        body { margin: 0; padding: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; touch-action: none; }
+        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        canvas { width: 100%; height: 100%; }
+        #ui { position: absolute; top: 50px; width: 80%; pointer-events: none; text-align: center; }
+        .gauge-bar { width: 100%; height: 6px; background: #222; border-radius: 3px; overflow: hidden; margin-top: 10px; }
+        #stability-fill { width: 20%; height: 100%; background: var(--accent); transition: width 0.3s; }
+        #msg { font-size: 1.2rem; font-weight: bold; opacity: 0; transition: opacity 0.5s; }
+        
+        #menu { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+        .mode-btn { width: 200px; padding: 15px; margin: 10px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 1rem; cursor: pointer; border-radius: 4px; }
+        .mode-btn:active { background: var(--accent); color: #000; }
+        #tutorial { position: absolute; bottom: 80px; font-size: 0.8rem; color: #666; text-align: center; }
     </style>
 </head>
 <body>
-
-<div class="view-container">
-    <video id="webcam" autoplay playsinline></video>
-    <canvas id="output_canvas"></canvas>
-
-    <div class="ui-panel">
-        <div id="status">ライブラリ読み込み中...</div>
-        <button id="webcamButton" disabled>カメラを起動</button>
+    <div id="game-container">
+        <div id="menu">
+            <h2 style="color:var(--accent)">SYNCHRONOUS SPHERE</h2>
+            <button class="mode-btn" onclick="startGame('EASY')">EASY (同調容易)</button>
+            <button class="mode-btn" onclick="startGame('NORMAL')">NORMAL (標準同調)</button>
+            <button class="mode-btn" onclick="startGame('HARD')">HARD (高速同調)</button>
+            <button class="mode-btn" onclick="startGame('HELL')" style="color:var(--warn); border-color:var(--warn)">HELL (極限同調)</button>
+        </div>
+        <div id="ui">
+            <div id="msg">READY</div>
+            <div class="gauge-bar"><div id="stability-fill"></div></div>
+        </div>
+        <canvas id="canvas"></canvas>
+        <div id="tutorial">中心の輪と「同じ大きさ」になる瞬間に指を離せ</div>
     </div>
-</div>
 
-<script type="module">
-    import { FaceLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const stabilityFill = document.getElementById('stability-fill');
+const msgLabel = document.getElementById('msg');
+const menu = document.getElementById('menu');
 
-    const video = document.getElementById('webcam');
-    const canvasElement = document.getElementById('output_canvas');
-    const canvasCtx = canvasElement.getContext('2d');
-    const webcamButton = document.getElementById('webcamButton');
-    const statusDisplay = document.getElementById('status');
+let width, height, targetBaseSize;
+let stability = 20;
+let isPressing = false;
+let playerRadius = 0;
+let targetRadius = 0;
+let phase = 0;
+let gameState = 'MENU'; 
 
-    let faceLandmarker;
-    let runningMode = "VIDEO";
-    let webcamRunning = false;
+// モード別パラメータ
+const MODES = {
+    EASY:   { speed: 1.5, tolerance: 120, penalty: 10, bonus: 20 },
+    NORMAL: { speed: 3.0, tolerance: 150, penalty: 20, bonus: 15 },
+    HARD:   { speed: 5.0, tolerance: 200, penalty: 30, bonus: 10 },
+    HELL:   { speed: 8.0, tolerance: 300, penalty: 50, bonus: 8 }
+};
+let currentMode = MODES.NORMAL;
 
-    // 1. モデルの初期化
-    async function init() {
-        try {
-            const filesetResolver = await FilesetResolver.forVisionTasks(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-            );
-            
-            faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-                baseOptions: {
-                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-                    delegate: "GPU"
-                },
-                outputFaceBlendshapes: false,
-                runningMode: runningMode,
-                numFaces: 1
-            });
-            
-            statusDisplay.innerText = "準備完了";
-            webcamButton.disabled = false;
-        } catch (e) {
-            statusDisplay.innerText = "エラー: " + e;
-        }
+function init() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    targetBaseSize = Math.min(width, height) * 0.35;
+}
+
+function startGame(modeKey) {
+    currentMode = MODES[modeKey];
+    stability = 20;
+    stabilityFill.style.width = '20%';
+    gameState = 'PLAY';
+    menu.style.display = 'none';
+    resetTarget();
+}
+
+function resetTarget() {
+    playerRadius = 0;
+    phase = Math.random() * Math.PI * 2;
+}
+
+window.addEventListener('touchstart', (e) => {
+    if(gameState !== 'PLAY') return;
+    isPressing = true;
+}, {passive: false});
+
+window.addEventListener('touchend', (e) => {
+    if(!isPressing) return;
+    isPressing = false;
+    checkSync();
+}, {passive: false});
+
+function checkSync() {
+    const diff = Math.abs(playerRadius - targetRadius);
+    // 難易度によって判定の厳しさを変える
+    const accuracy = Math.max(0, 100 - (diff / targetRadius * currentMode.tolerance));
+    
+    if (accuracy > 88) {
+        stability += currentMode.bonus;
+        showMsg("EXCELLENT", "#00f2ff");
+    } else if (accuracy > 65) {
+        stability += currentMode.bonus * 0.4;
+        showMsg("GOOD", "#fff");
+    } else {
+        stability -= currentMode.penalty;
+        showMsg("MISMATCH", "#ff0055");
     }
-    init();
+    
+    stability = Math.min(100, Math.max(0, stability));
+    stabilityFill.style.width = `${stability}%`;
+    
+    if (stability >= 100) {
+        finishGame("SYNCHRONIZED");
+    } else if (stability <= 0) {
+        finishGame("COLLAPSED");
+    }
+    resetTarget();
+}
 
-    // 2. カメラ起動
-    async function toggleCamera() {
-        if (webcamRunning) {
-            webcamRunning = false;
-            webcamButton.innerText = "カメラを起動";
-            const stream = video.srcObject;
-            stream.getTracks().forEach(track => track.stop());
-            video.srcObject = null;
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            return;
-        }
+function showMsg(text, color) {
+    msgLabel.innerText = text;
+    msgLabel.style.color = color;
+    msgLabel.style.opacity = 1;
+    setTimeout(() => { msgLabel.style.opacity = 0; }, 600);
+}
 
-        webcamRunning = true;
-        webcamButton.innerText = "カメラを停止";
+function finishGame(resultText) {
+    gameState = 'MENU';
+    setTimeout(() => {
+        menu.style.display = 'flex';
+        msgLabel.innerText = resultText;
+        msgLabel.style.opacity = 1;
+    }, 1000);
+}
 
-        const constraints = {
-            video: {
-                facingMode: "user", // インカメラ優先
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            }
-        };
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = stream;
-            video.addEventListener('loadeddata', () => {
-                canvasElement.width = video.videoWidth;
-                canvasElement.height = video.videoHeight;
-                renderLoop();
-            });
-        } catch (err) {
-            alert("カメラにアクセスできません: " + err);
-            webcamRunning = false;
-            webcamButton.innerText = "カメラを起動";
-        }
+function update() {
+    ctx.clearRect(0, 0, width, height);
+    if(gameState !== 'PLAY') {
+        requestAnimationFrame(update);
+        return;
     }
 
-    webcamButton.addEventListener('click', toggleCamera);
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const time = Date.now() / 1000;
 
-    // 3. 描画ループ
-    const drawingUtils = new DrawingUtils(canvasCtx);
-    let lastVideoTime = -1;
+    // 難易度に応じたスピードで変化
+    const pulse = Math.sin(time * currentMode.speed + phase) * 0.3 + 0.7;
+    targetRadius = targetBaseSize * pulse;
 
-    async function renderLoop() {
-        if (!webcamRunning) return;
+    // ターゲット外郭
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, targetRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.setLineDash([5, 5]); // 点線で「不安定さ」を表現
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.setLineDash([]);
 
-        if (video.currentTime !== lastVideoTime) {
-            lastVideoTime = video.currentTime;
-            const startTimeMs = performance.now();
-            const results = faceLandmarker.detectForVideo(video, startTimeMs);
-
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-            if (results.faceLandmarks) {
-                for (const landmarks of results.faceLandmarks) {
-                    // スマホ負荷を考慮し、主要パーツのみ描画
-                    // 全体メッシュ
-                    drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_TESSELATION, { color: "#C0C0C070", lineWidth: 1 });
-                    // 目
-                    drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, { color: "#FF3030" });
-                    drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, { color: "#30FF30" });
-                    // 唇
-                    drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_LIPS, { color: "#E0E0E0" });
-                }
-            }
-        }
-        requestAnimationFrame(renderLoop);
+    // プレイヤーの拡張
+    if (isPressing) {
+        playerRadius += 5; 
+        if (playerRadius > Math.max(width, height)) playerRadius = 0;
+        
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, playerRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 242, 255, 0.2)';
+        ctx.fill();
+        ctx.strokeStyle = 'var(--accent)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        // 中心からのガイド光
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(centerX + playerRadius, centerY);
+        ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
+        ctx.stroke();
     }
+
+    requestAnimationFrame(update);
+}
+
+window.addEventListener('resize', init);
+init();
+update();
 </script>
 </body>
 </html>
