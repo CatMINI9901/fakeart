@@ -2,190 +2,340 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Synchronous Sphere: Multi-Phase</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P オンラインお絵描きボード</title>
+    <!-- PeerJSの読み込み（WebRTCのシグナリングを簡素化するライブラリ） -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
-        :root { --bg: #0a0a0c; --accent: #00f2ff; --warn: #ff0055; }
-        body { margin: 0; padding: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; touch-action: none; }
-        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        canvas { width: 100%; height: 100%; }
-        #ui { position: absolute; top: 50px; width: 80%; pointer-events: none; text-align: center; }
-        .gauge-bar { width: 100%; height: 6px; background: #222; border-radius: 3px; overflow: hidden; margin-top: 10px; }
-        #stability-fill { width: 20%; height: 100%; background: var(--accent); transition: width 0.3s; }
-        #msg { font-size: 1.2rem; font-weight: bold; opacity: 0; transition: opacity 0.5s; }
-        
-        #menu { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
-        .mode-btn { width: 200px; padding: 15px; margin: 10px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 1rem; cursor: pointer; border-radius: 4px; }
-        .mode-btn:active { background: var(--accent); color: #000; }
-        #tutorial { position: absolute; bottom: 80px; font-size: 0.8rem; color: #666; text-align: center; }
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg: #ffffff;
+            --border-color: #ccc;
+        }
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        #connection-panel {
+            background: var(--panel-bg);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 800px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        #link-area {
+            margin-top: 10px;
+            display: none;
+        }
+        #share-url {
+            width: 70%;
+            padding: 5px;
+            font-size: 14px;
+        }
+        button {
+            padding: 6px 12px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button:hover { background-color: #0056b3; }
+        #toolbar {
+            background: var(--panel-bg);
+            padding: 10px;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            width: 100%;
+            max-width: 800px;
+            box-sizing: border-box;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .tool-item { display: flex; align-items: center; gap: 5px; }
+        canvas {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            cursor: crosshair;
+            max-width: 100%;
+            height: auto;
+        }
+        #status { font-weight: bold; color: #666; }
+        .connected { color: #28a745 !important; }
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <div id="menu">
-            <h2 style="color:var(--accent)">SYNCHRONOUS SPHERE</h2>
-            <button class="mode-btn" onclick="startGame('EASY')">EASY (同調容易)</button>
-            <button class="mode-btn" onclick="startGame('NORMAL')">NORMAL (標準同調)</button>
-            <button class="mode-btn" onclick="startGame('HARD')">HARD (高速同調)</button>
-            <button class="mode-btn" onclick="startGame('HELL')" style="color:var(--warn); border-color:var(--warn)">HELL (極限同調)</button>
+
+    <h1>P2P オンラインお絵描き</h1>
+
+    <!-- 接続管理パネル -->
+    <div id="connection-panel">
+        <div>ステータス: <span id="status">初期化中...</span></div>
+        <div id="link-area">
+            <p>ゲストを招待するためのリンク:</p>
+            <input type="text" id="share-url" readonly>
+            <button onclick="copyLink()">リンクをコピー</button>
         </div>
-        <div id="ui">
-            <div id="msg">READY</div>
-            <div class="gauge-bar"><div id="stability-fill"></div></div>
-        </div>
-        <canvas id="canvas"></canvas>
-        <div id="tutorial">中心の輪と「同じ大きさ」になる瞬間に指を離せ</div>
     </div>
 
-<script>
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const stabilityFill = document.getElementById('stability-fill');
-const msgLabel = document.getElementById('msg');
-const menu = document.getElementById('menu');
+    <!-- お絵描きツールバー -->
+    <div id="toolbar">
+        <div class="tool-item">
+            <label for="color-picker">色:</label>
+            <input type="color" id="color-picker" value="#000000">
+        </div>
+        <div class="tool-item">
+            <label for="size-slider">太さ:</label>
+            <input type="range" id="size-slider" min="1" max="20" value="5">
+            <span id="size-val">5</span>
+        </div>
+        <button id="clear-btn" style="background-color: #dc3545;">全消去</button>
+    </div>
 
-let width, height, targetBaseSize;
-let stability = 20;
-let isPressing = false;
-let playerRadius = 0;
-let targetRadius = 0;
-let phase = 0;
-let gameState = 'MENU'; 
+    <!-- キャンバス（座標ズレを防ぐため内部解像度を固定） -->
+    <canvas id="paint-canvas" width="800" height="600"></canvas>
 
-// モード別パラメータ
-const MODES = {
-    EASY:   { speed: 1.5, tolerance: 120, penalty: 10, bonus: 20 },
-    NORMAL: { speed: 3.0, tolerance: 150, penalty: 20, bonus: 15 },
-    HARD:   { speed: 5.0, tolerance: 200, penalty: 30, bonus: 10 },
-    HELL:   { speed: 8.0, tolerance: 300, penalty: 50, bonus: 8 }
-};
-let currentMode = MODES.NORMAL;
+    <script>
+        const canvas = document.getElementById('paint-canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('color-picker');
+        const sizeSlider = document.getElementById('size-slider');
+        const sizeVal = document.getElementById('size-val');
+        const clearBtn = document.getElementById('clear-btn');
+        const statusEl = document.getElementById('status');
+        const linkArea = document.getElementById('link-area');
+        const shareUrlInput = document.getElementById('share-url');
 
-function init() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
-    targetBaseSize = Math.min(width, height) * 0.35;
-}
+        // 太さ表示の更新
+        sizeSlider.addEventListener('input', () => sizeVal.textContent = sizeSlider.value);
 
-function startGame(modeKey) {
-    currentMode = MODES[modeKey];
-    stability = 20;
-    stabilityFill.style.width = '20%';
-    gameState = 'PLAY';
-    menu.style.display = 'none';
-    resetTarget();
-}
+        // お絵描きに関する状態管理
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
 
-function resetTarget() {
-    playerRadius = 0;
-    phase = Math.random() * Math.PI * 2;
-}
+        // P2Pネットワークに関する状態管理
+        let peer = null;
+        let connections = []; // ホスト用：接続された全ゲストのリスト
+        let hostConnection = null; // ゲスト用：ホストへの接続オブジェクト
+        let isHost = true;
 
-window.addEventListener('touchstart', (e) => {
-    if(gameState !== 'PLAY') return;
-    isPressing = true;
-}, {passive: false});
+        // URLパラメータからルームID（ホストのPeerID）を取得
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('room');
 
-window.addEventListener('touchend', (e) => {
-    if(!isPressing) return;
-    isPressing = false;
-    checkSync();
-}, {passive: false});
+        if (roomId) {
+            isHost = false;
+        }
 
-function checkSync() {
-    const diff = Math.abs(playerRadius - targetRadius);
-    // 難易度によって判定の厳しさを変える
-    const accuracy = Math.max(0, 100 - (diff / targetRadius * currentMode.tolerance));
-    
-    if (accuracy > 88) {
-        stability += currentMode.bonus;
-        showMsg("EXCELLENT", "#00f2ff");
-    } else if (accuracy > 65) {
-        stability += currentMode.bonus * 0.4;
-        showMsg("GOOD", "#fff");
-    } else {
-        stability -= currentMode.penalty;
-        showMsg("MISMATCH", "#ff0055");
-    }
-    
-    stability = Math.min(100, Math.max(0, stability));
-    stabilityFill.style.width = `${stability}%`;
-    
-    if (stability >= 100) {
-        finishGame("SYNCHRONIZED");
-    } else if (stability <= 0) {
-        finishGame("COLLAPSED");
-    }
-    resetTarget();
-}
+        // --- PeerJS 初期化 ---
+        // ランダムなIDでPeerオブジェクトを作成（PeerJSの公開サーバーを利用）
+        peer = new Peer();
 
-function showMsg(text, color) {
-    msgLabel.innerText = text;
-    msgLabel.style.color = color;
-    msgLabel.style.opacity = 1;
-    setTimeout(() => { msgLabel.style.opacity = 0; }, 600);
-}
+        peer.on('open', (id) => {
+            if (isHost) {
+                statusEl.textContent = '待機中（ホスト）';
+                statusEl.className = 'connected';
+                // 招待リンクの生成
+                const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${id}`;
+                shareUrlInput.value = inviteUrl;
+                linkArea.style.display = 'block';
+            } else {
+                statusEl.textContent = 'ホストに接続中...';
+                // ゲストとしてホストへ接続を試みる
+                const conn = peer.connect(roomId);
+                setupConnection(conn);
+            }
+        });
 
-function finishGame(resultText) {
-    gameState = 'MENU';
-    setTimeout(() => {
-        menu.style.display = 'flex';
-        msgLabel.innerText = resultText;
-        msgLabel.style.opacity = 1;
-    }, 1000);
-}
+        peer.on('error', (err) => {
+            console.error(err);
+            statusEl.textContent = 'エラーが発生しました: ' + err.type;
+            statusEl.className = '';
+        });
 
-function update() {
-    ctx.clearRect(0, 0, width, height);
-    if(gameState !== 'PLAY') {
-        requestAnimationFrame(update);
-        return;
-    }
+        // ホスト側：ゲストからの接続を待ち受けるイベント
+        peer.on('connection', (conn) => {
+            if (isHost) {
+                connections.push(conn);
+                statusEl.textContent = `接続中 (参加者: ${connections.length}人)`;
+                setupConnection(conn);
+            }
+        });
 
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const time = Date.now() / 1000;
+        // --- 通信データの処理設定 ---
+        function setupConnection(conn) {
+            if (!isHost) {
+                hostConnection = conn;
+            }
 
-    // 難易度に応じたスピードで変化
-    const pulse = Math.sin(time * currentMode.speed + phase) * 0.3 + 0.7;
-    targetRadius = targetBaseSize * pulse;
+            conn.on('open', () => {
+                if (!isHost) {
+                    statusEl.textContent = 'オンライン（ゲストとして接続完了）';
+                    statusEl.className = 'connected';
+                }
+            });
 
-    // ターゲット外郭
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, targetRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.setLineDash([5, 5]); // 点線で「不安定さ」を表現
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.setLineDash([]);
+            // メッセージ（描画データ）を受信したときの処理
+            conn.on('data', (data) => {
+                if (data.type === 'draw') {
+                    // 受信した座標で線を描画
+                    drawOnCanvas(data.x1, data.y1, data.x2, data.y2, data.color, data.size);
+                    
+                    // ホストの場合は、他のすべてのゲストにこの描画データを転送（ブロードキャスト）
+                    if (isHost) {
+                        broadcast(data, conn.peer);
+                    }
+                } else if (data.type === 'clear') {
+                    localClear();
+                    if (isHost) {
+                        broadcast(data, conn.peer);
+                    }
+                }
+            });
 
-    // プレイヤーの拡張
-    if (isPressing) {
-        playerRadius += 5; 
-        if (playerRadius > Math.max(width, height)) playerRadius = 0;
-        
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, playerRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 242, 255, 0.2)';
-        ctx.fill();
-        ctx.strokeStyle = 'var(--accent)';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        
-        // 中心からのガイド光
-        ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.lineTo(centerX + playerRadius, centerY);
-        ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
-        ctx.stroke();
-    }
+            conn.on('close', () => {
+                if (isHost) {
+                    connections = connections.filter(c => c.peer !== conn.peer);
+                    statusEl.textContent = connections.length > 0 ? `接続中 (参加者: ${connections.length}人)` : '待機中（ホスト）';
+                } else {
+                    statusEl.textContent = 'ホストとの接続が切断されました';
+                    statusEl.className = '';
+                }
+            });
+        }
 
-    requestAnimationFrame(update);
-}
+        // 全員にデータを転送する関数（送信元を除く）
+        function broadcast(data, excludePeerId) {
+            connections.forEach(conn => {
+                if (conn.peer !== excludePeerId && conn.open) {
+                    conn.send(data);
+                }
+            });
+        }
 
-window.addEventListener('resize', init);
-init();
-update();
-</script>
+        // --- 描画ロジック ---
+        function drawOnCanvas(x1, y1, x2, y2, color, size) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = size;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        // マウス/タッチ座標をCanvasの内部解像度に変換する関数
+        function getCanvasCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            // タッチイベントとマウスイベントの双方に対応
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const coords = getCanvasCoordinates(e);
+            lastX = coords.x;
+            lastY = coords.y;
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            e.preventDefault(); // スクロール等の標準動作を防止
+
+            const coords = getCanvasCoordinates(e);
+            const currentX = coords.x;
+            const currentY = coords.y;
+            const color = colorPicker.value;
+            const size = sizeSlider.value;
+
+            // 1. ローカルのキャンバスに描画
+            drawOnCanvas(lastX, lastY, currentX, currentY, color, size);
+
+            // 2. ネットワーク上の相手にデータを送信
+            const drawData = {
+                type: 'draw',
+                x1: lastX,
+                y1: lastY,
+                x2: currentX,
+                y2: currentY,
+                color: color,
+                size: size
+            };
+
+            if (isHost) {
+                broadcast(drawData, null); // ゲスト全員に送信
+            } else if (hostConnection && hostConnection.open) {
+                hostConnection.send(drawData); // ホストに送信
+            }
+
+            lastX = currentX;
+            lastY = currentY;
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        // イベントリスナーの登録（マウス）
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', stopDrawing);
+
+        // イベントリスナーの登録（スマホ・タブレット等のタッチ）
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        window.addEventListener('touchend', stopDrawing);
+
+        // --- クリア（全消去）処理 ---
+        function localClear() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        clearBtn.addEventListener('click', () => {
+            localClear();
+            const clearData = { type: 'clear' };
+
+            if (isHost) {
+                broadcast(clearData, null);
+            } else if (hostConnection && hostConnection.open) {
+                hostConnection.send(clearData);
+            }
+        });
+
+        // ユーティリティ: リンクコピー用
+        function copyLink() {
+            shareUrlInput.select();
+            document.execCommand('copy');
+            alert('招待リンクをクリップボードにコピーしました！ゲストに共有してください。');
+        }
+    </script>
 </body>
 </html>
