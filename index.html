@@ -3,524 +3,448 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>P2P リアルタイム2Dアリーナ（スマホ対応版）</title>
+    <title>P2P リモートプレゼンター (スマホ対応)</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         :root {
-            --bg-color: #1a1a1a;
-            --panel-bg: #2d2d2d;
-            --text-color: #ffffff;
-            --border-color: #444;
+            --bg-color: #f4f6f9;
+            --panel-bg: #ffffff;
+            --accent-color: #007bff;
+            --text-dark: #333333;
         }
         body {
-            font-family: 'Courier New', Courier, monospace;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             margin: 0;
-            padding: 10px;
+            padding: 0;
             background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            /* スマホでの引っ張り更新やバウンススクロールを防止 */
-            overflow: hidden;
-            position: fixed;
-            width: 100%;
-            height: 100%;
+            color: var(--text-dark);
             box-sizing: border-box;
         }
-        h1 {
-            font-size: 20px;
-            margin: 5px 0;
+
+        /* 役割（ホスト/ゲスト）に応じてJavaScriptで表示を切り替え */
+        .view-section { display: none; }
+
+        /* --- ホスト（PC/プロジェクター側）のスタイル --- */
+        #host-window {
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
         }
-        #connection-panel {
+        #setup-panel {
             background: var(--panel-bg);
-            padding: 10px;
+            padding: 15px;
             border-radius: 8px;
-            border: 1px solid var(--border-color);
-            margin-bottom: 10px;
-            width: 100%;
-            max-width: 800px;
-            box-sizing: border-box;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
             text-align: center;
-            font-size: 12px;
         }
         #share-url {
-            width: 50%;
-            padding: 4px;
-            background: #111;
-            color: #0f0;
-            border: 1px solid var(--border-color);
-            font-size: 12px;
+            width: 60%;
+            padding: 6px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
         button {
-            padding: 4px 10px;
-            cursor: pointer;
-            background-color: #007bff;
+            padding: 6px 14px;
+            background: var(--accent-color);
             color: white;
             border: none;
             border-radius: 4px;
-            font-size: 12px;
+            cursor: pointer;
         }
-        button:hover { background-color: #0056b3; }
+        button:hover { background: #0056b3; }
+        
+        /* プレゼン画面のコンテナ */
+        #presentation-stage {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
         canvas {
-            background: #000000;
-            border: 2px solid #00ff00;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
-            max-width: 100%;
-            max-height: 70vh;
+            display: block;
+            width: 100%;
             height: auto;
-            /* スマホでの標準ジェスチャー（スクロールやピンチ）を無効化 */
-            touch-action: none; 
         }
-        #status { font-weight: bold; color: #ff3333; }
-        .connected { color: #00ff00 !important; }
-        #instructions {
-            margin-top: 5px;
-            font-size: 11px;
+
+        /* --- ゲスト（スマホ/リモコン側）のスタイル --- */
+        #guest-window {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            background: #1e222b;
+            color: #fff;
+            padding: 15px;
+            touch-action: none; /* スクロールやバウンスを徹底ガード */
+        }
+        .controller-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .nav-btn {
+            flex: 1;
+            height: 60px;
+            font-size: 18px;
+            font-weight: bold;
+            background: #2c313c;
+            border: 1px solid #3e4451;
+            color: #fff;
+            border-radius: 8px;
+        }
+        .nav-btn:active { background: var(--accent-color); }
+        
+        /* スマホ用トラックパッドエリア */
+        #trackpad {
+            flex: 1;
+            background: #15181f;
+            border: 2px dashed #3e4451;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            font-size: 14px;
+            position: relative;
+        }
+        #trackpad-finger {
+            position: absolute;
+            width: 20px; height: 20px;
+            background: rgba(0, 123, 255, 0.4);
+            border: 2px solid var(--accent-color);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            pointer-events: none;
+        }
+
+        /* メモ送信エリア */
+        #memo-area {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        #memo-input {
+            flex: 1;
+            padding: 10px;
+            background: #2c313c;
+            border: 1px solid #3e4451;
+            color: #fff;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        #send-memo-btn {
+            background: #28a745;
+        }
+
+        #status-bar {
+            font-size: 12px;
+            text-align: center;
+            margin-bottom: 5px;
             color: #aaa;
         }
     </style>
 </head>
 <body>
 
-    <h1>P2P ARENA SHOOTER</h1>
-
-    <div id="connection-panel">
-        <div>STATUS: <span id="status">INITIALIZING...</span></div>
-        <div id="link-area" style="display: none; margin-top: 5px;">
-            <input type="text" id="share-url" readonly>
-            <button onclick="copyLink()">COPY LINK</button>
+    <!-- ================= ホスト画面 (PC側) ================= -->
+    <div id="host-window" class="view-section">
+        <div id="setup-panel">
+            <div style="margin-bottom: 8px;">ステータス: <span id="host-status" style="font-weight:bold; color:#dc3545;">初期化中...</span></div>
+            <div id="link-area" style="display:none;">
+                <span style="font-size: 14px;">スマホで開く用のリモコンリンク:</span>
+                <input type="text" id="share-url" readonly>
+                <button onclick="copyLink()">リンクをコピー</button>
+            </div>
         </div>
-        <div id="instructions">PC: [WASD]移動 / クリック射撃 | スマホ: [画面左下]スライド移動 / [画面右側]タッチ連射</div>
+        
+        <div id="presentation-stage">
+            <!-- プレゼン表示用の固定解像度キャンバス -->
+            <canvas id="slide-canvas" width="800" height="500"></canvas>
+        </div>
     </div>
 
-    <canvas id="game-canvas" width="800" height="600"></canvas>
+    <!-- ================= ゲスト画面 (スマホ側) ================= -->
+    <div id="guest-window" class="view-section">
+        <div id="status-bar">ステータス: <span id="guest-status">接続中...</span></div>
+        
+        <!-- スライド操作ボタン -->
+        <div class="controller-row">
+            <button class="nav-btn" id="prev-btn">◀ BACK</button>
+            <button class="nav-btn" id="next-btn">NEXT ▶</button>
+        </div>
+
+        <!-- レーザーポインター用トラックパッド -->
+        <div id="trackpad">
+            ここに触れてスライドをポインティング
+            <div id="trackpad-finger"></div>
+        </div>
+
+        <!-- PCへのテキスト転送機能 -->
+        <div id="memo-area">
+            <input type="text" id="memo-input" placeholder="PC画面へメッセージを送信...">
+            <button id="send-memo-btn">送信</button>
+        </div>
+    </div>
 
     <script>
-        const canvas = document.getElementById('game-canvas');
-        const ctx = canvas.getContext('2d');
-        const statusEl = document.getElementById('status');
-        const linkArea = document.getElementById('link-area');
-        const shareUrlInput = document.getElementById('share-url');
-
-        // --- ゲームの状態管理 ---
-        const myId = Math.random().toString(36).substring(2, 9);
-        let players = {};
-        let bullets = [];
-        let keys = {};
-
-        // 射撃クールダウン（押しっぱなし連射用）
-        let shootCooldown = 0;
-        const SHOOT_INTERVAL = 12; // 射撃間隔（フレーム数）
-
-        // ローカルプレイヤーの初期設定
-        let myColor = '#00ffff';
-        players[myId] = {
-            x: 100,
-            y: 300,
-            radius: 15,
-            color: myColor,
-            score: 0
-        };
-
-        // --- スマホ用バーチャル操作の状態管理 ---
-        let joyCenter = { x: 110, y: 490 }; // ジョイスティックの中心位置
-        let joyStick = { x: 110, y: 490 };  // 内側のつまみの位置
-        let joyRadius = 60;                 // 可動半径
-        let joyTouchId = null;              // 移動に使っている指の識別ID
-        let touchMoveDir = { x: 0, y: 0 };  // 移動ベクトル（-1.0 〜 1.0）
-
-        let shootTouchId = null;            // 射撃に使っている指の識別ID
-        let shootTarget = { x: 0, y: 0 };   // 射撃の標的座標
-        let isMouseDown = false;            // PC用：マウスが押されているか
-        let mousePos = { x: 0, y: 0 };      // PC用：マウス座標
-
-        // --- P2P ネットワーク管理 ---
-        let peer = null;
-        let connections = [];
-        let hostConnection = null;
-        let isHost = true;
-
+        // --- 共通の接続ロジック ---
         const urlParams = new URLSearchParams(window.location.search);
         const roomId = urlParams.get('room');
-        if (roomId) {
-            isHost = false;
-            myColor = '#ff00ff';
-            players[myId].color = myColor;
-            players[myId].x = 700;
-            players[myId].y = 300;
+        const isHost = !roomId;
+
+        let peer = null;
+        let conn = null;
+
+        // UI要素の取得
+        const hostWindow = document.getElementById('host-window');
+        const guestWindow = document.getElementById('guest-window');
+
+        // ビューの切り替え
+        if (isHost) {
+            hostWindow.style.display = 'block';
+            initHost();
+        } else {
+            guestWindow.style.display = 'flex';
+            initGuest();
         }
 
-        peer = new Peer();
+        // --- ホスト側（PC）の処理 ---
+        let currentSlide = 0;
+        let pointerPos = { x: 0, y: 0, active: false };
+        let memoText = "";
+        let memoTimer = 0;
 
-        peer.on('open', (id) => {
-            if (isHost) {
-                statusEl.textContent = 'WAITING FOR OPPONENT...';
+        // ダミースライドのデータ
+        const slides = [
+            { title: "1. P2P Webリモコンツール", desc: "WebRTCを使って、サーバーを介さずにスマホからダイレクトにPCを操作します。" },
+            { title: "2. このシステムのメリット", desc: "端末間で直接データを同期するため、遅延が極めて少なく、機密性の高いプレゼンでも安心です。" },
+            { title: "3. 応用できる機能アイデア", desc: "今回はポインターとスライド、テキスト同期ですが、スマホのジャイロ（傾き）同期なども実装可能です。" }
+        ];
+
+        function initHost() {
+            const statusEl = document.getElementById('host-status');
+            const linkArea = document.getElementById('link-area');
+            const shareUrlInput = document.getElementById('share-url');
+
+            peer = new Peer();
+
+            peer.on('open', (id) => {
+                statusEl.textContent = 'スマホからの接続を待っています...';
+                statusEl.style.color = '#ffc107';
                 const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${id}`;
                 shareUrlInput.value = inviteUrl;
                 linkArea.style.display = 'block';
-            } else {
-                statusEl.textContent = 'CONNECTING TO HOST...';
-                const conn = peer.connect(roomId);
-                setupConnection(conn);
-            }
-        });
-
-        peer.on('connection', (conn) => {
-            if (isHost) {
-                connections.push(conn);
-                statusEl.textContent = 'READY TO FIGHT';
-                statusEl.className = 'connected';
-                setupConnection(conn);
-                sendInitState(conn);
-            }
-        });
-
-        function setupConnection(conn) {
-            if (!isHost) hostConnection = conn;
-
-            conn.on('open', () => {
-                if (!isHost) {
-                    statusEl.textContent = 'CONNECTED TO HOST';
-                    statusEl.className = 'connected';
-                }
             });
 
+            peer.on('connection', (connection) => {
+                conn = connection;
+                statusEl.textContent = 'リモコンが接続されました！';
+                statusEl.style.color = '#28a745';
+                setupHostReceiver();
+            });
+
+            // ホスト側のCanvas描画ループを開始
+            requestAnimationFrame(hostRenderLoop);
+        }
+
+        function setupHostReceiver() {
             conn.on('data', (data) => {
-                switch(data.type) {
-                    case 'init':
-                        Object.keys(data.players).forEach(id => {
-                            if(id !== myId) players[id] = data.players[id];
-                        });
-                        break;
-
-                    case 'move':
-                        if (!players[data.id]) {
-                            players[data.id] = { radius: 15, score: 0 };
-                        }
-                        players[data.id].x = data.x;
-                        players[data.id].y = data.y;
-                        players[data.id].color = data.color;
-                        players[data.id].score = data.score;
-                        if (isHost) broadcast(data, conn.peer);
-                        break;
-
-                    case 'shoot':
-                        bullets.push({
-                            x: data.x, y: data.y, vx: data.vx, vy: data.vy,
-                            owner: data.owner, active: true
-                        });
-                        if (isHost) broadcast(data, conn.peer);
-                        break;
-
-                    case 'hit':
-                        if (players[data.targetId]) {
-                            players[data.targetId].x = data.spawnX;
-                            players[data.targetId].y = data.spawnY;
-                        }
-                        if (players[data.killerId]) {
-                            players[data.killerId].score = data.killerScore;
-                        }
-                        if (isHost) broadcast(data, conn.peer);
-                        break;
-                }
-            });
-
-            conn.on('close', () => {
-                if (isHost) {
-                    connections = connections.filter(c => c.peer !== conn.peer);
-                    if(connections.length === 0) statusEl.textContent = 'WAITING FOR OPPONENT...';
-                } else {
-                    statusEl.textContent = 'DISCONNECTED';
-                    statusEl.className = '';
+                if (data.type === 'nav') {
+                    // スライドめくりイベント
+                    if (data.dir === 'next') currentSlide = Math.min(slides.length - 1, currentSlide + 1);
+                    if (data.dir === 'prev') currentSlide = Math.max(0, currentSlide - 1);
+                } else if (data.type === 'pointer') {
+                    // ポインター座標情報（0.0 〜 1.0 に正規化されたもの）
+                    pointerPos.x = data.x * 800;
+                    pointerPos.y = data.y * 500;
+                    pointerPos.active = data.active;
+                } else if (data.type === 'memo') {
+                    // テキストメモ受信
+                    memoText = data.text;
+                    memoTimer = 180; // 約3秒間表示（60fps * 3）
                 }
             });
         }
 
-        function broadcast(data, excludePeerId) {
-            connections.forEach(conn => {
-                if (conn.peer !== excludePeerId && conn.open) conn.send(data);
-            });
-        }
+        function hostRenderLoop() {
+            const canvas = document.getElementById('slide-canvas');
+            const ctx = canvas.getContext('2d');
 
-        function sendInitState(conn) {
-            conn.send({ type: 'init', players: players });
-        }
+            // 背景クリア
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // スライド枠線の描画
+            ctx.strokeStyle = '#e9ecef';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
 
-        // --- タッチ＆マウス座標の変換ユーティリティ ---
-        function getCanvasCoordinates(clientX, clientY) {
-            const rect = canvas.getBoundingClientRect();
-            return {
-                x: (clientX - rect.left) * (canvas.width / rect.width),
-                y: (clientY - rect.top) * (canvas.height / rect.height)
-            };
-        }
+            // スライドコンテンツ描画
+            const slide = slides[currentSlide];
+            ctx.fillStyle = '#1e222b';
+            ctx.font = 'bold 32px sans-serif';
+            ctx.fillText(slide.title, 50, 100);
 
-        // --- タッチイベント処理（マルチタッチ対応） ---
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // スクロールなどを完全にガード
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                const coords = getCanvasCoordinates(touch.clientX, touch.clientY);
+            ctx.fillStyle = '#495057';
+            ctx.font = '20px sans-serif';
+            // 簡易的な自動改行テキスト描画
+            wrapText(ctx, slide.desc, 50, 180, 700, 32);
 
-                // 画面の左下エリア（Xが半分より左、かつYが半分より下）ならジョイスティックとして判定
-                if (coords.x < canvas.width / 2 && coords.y > canvas.height / 2) {
-                    if (joyTouchId === null) {
-                        joyTouchId = touch.identifier;
-                        updateJoystick(coords);
-                    }
-                } else {
-                    // それ以外のエリアは射撃ターゲットとして判定
-                    if (shootTouchId === null) {
-                        shootTouchId = touch.identifier;
-                        shootTarget = coords;
-                    }
-                }
-            }
-        }, { passive: false });
+            // ページ番号
+            ctx.fillStyle = '#adb5bd';
+            ctx.font = '14px monospace';
+            ctx.fillText(`PAGE: ${currentSlide + 1} / ${slides.length}`, 50, 450);
 
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                const coords = getCanvasCoordinates(touch.clientX, touch.clientY);
-
-                if (touch.identifier === joyTouchId) {
-                    updateJoystick(coords);
-                } else if (touch.identifier === shootTouchId) {
-                    shootTarget = coords;
-                }
-            }
-        }, { passive: false });
-
-        const endTouchHandler = (e) => {
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                if (touch.identifier === joyTouchId) {
-                    joyTouchId = null;
-                    joyStick = { ...joyCenter }; // スティックを中央に戻す
-                    touchMoveDir = { x: 0, y: 0 };
-                } else if (touch.identifier === shootTouchId) {
-                    shootTouchId = null;
-                }
-            }
-        };
-        canvas.addEventListener('touchend', endTouchHandler);
-        canvas.addEventListener('touchcancel', endTouchHandler);
-
-        function updateJoystick(coords) {
-            const dx = coords.x - joyCenter.x;
-            const dy = coords.y - joyCenter.y;
-            const dist = Math.hypot(dx, dy);
-
-            if (dist <= joyRadius) {
-                joyStick.x = coords.x;
-                joyStick.y = coords.y;
-            } else {
-                joyStick.x = joyCenter.x + (dx / dist) * joyRadius;
-                joyStick.y = joyCenter.y + (dy / dist) * joyRadius;
+            // 受信したテキストメモ（画面下部にポップアップ表示）
+            if (memoTimer > 0) {
+                memoTimer--;
+                ctx.save();
+                ctx.fillStyle = 'rgba(40, 167, 69, 0.9)';
+                ctx.fillRect(50, 350, 700, 50);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 16px sans-serif';
+                ctx.fillText(`手元からのメモ: ${memoText}`, 70, 380);
+                ctx.restore();
             }
 
-            // 移動比率を計算 (-1.0 〜 1.0)
-            touchMoveDir.x = (joyStick.x - joyCenter.x) / joyRadius;
-            touchMoveDir.y = (joyStick.y - joyCenter.y) / joyRadius;
-        }
-
-
-        // --- PC用 マウス/キーボードイベント処理 ---
-        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
-        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
-
-        canvas.addEventListener('mousedown', (e) => {
-            isMouseDown = true;
-            updateMousePos(e);
-        });
-        window.addEventListener('mousemove', (e) => {
-            if (isMouseDown) updateMousePos(e);
-        });
-        window.addEventListener('mouseup', () => isMouseDown = false);
-
-        function updateMousePos(e) {
-            const coords = getCanvasCoordinates(e.clientX, e.clientY);
-            mousePos.x = coords.x;
-            mousePos.y = coords.y;
-        }
-
-
-        // --- 弾の発射処理 ---
-        function fireBullet(p, tX, tY) {
-            const angle = Math.atan2(tY - p.y, tX - p.x);
-            const bulletSpeed = 7;
-            const bulletData = {
-                type: 'shoot',
-                x: p.x + Math.cos(angle) * (p.radius + 5),
-                y: p.y + Math.sin(angle) * (p.radius + 5),
-                vx: Math.cos(angle) * bulletSpeed,
-                vy: Math.sin(angle) * bulletSpeed,
-                owner: myId
-            };
-
-            bullets.push({ x: bulletData.x, y: bulletData.y, vx: bulletData.vx, vy: bulletData.vy, owner: myId, active: true });
-
-            if (isHost) broadcast(bulletData, null);
-            else if (hostConnection && hostConnection.open) hostConnection.send(bulletData);
-        }
-
-
-        // --- ゲームループ（計算） ---
-        function update() {
-            const my = players[myId];
-            if (!my) return;
-
-            let moved = false;
-            const speed = 4;
-
-            // 1. 移動計算 (キーボード)
-            if (keys['w'] || keys['arrowup']) { my.y -= speed; moved = true; }
-            if (keys['s'] || keys['arrowdown']) { my.y += speed; moved = true; }
-            if (keys['a'] || keys['arrowleft']) { my.x -= speed; moved = true; }
-            if (keys['d'] || keys['arrowright']) { my.x += speed; moved = true; }
-
-            // 1. 移動計算 (スマホジョイスティック入力を合成)
-            if (touchMoveDir.x !== 0 || touchMoveDir.y !== 0) {
-                my.x += touchMoveDir.x * speed;
-                my.y += touchMoveDir.y * speed;
-                moved = true;
-            }
-
-            my.x = Math.max(my.radius, Math.min(canvas.width - my.radius, my.x));
-            my.y = Math.max(my.radius, Math.min(canvas.height - my.radius, my.y));
-
-            if (moved) {
-                const moveData = { type: 'move', id: myId, x: my.x, y: my.y, color: my.color, score: my.score };
-                if (isHost) broadcast(moveData, null);
-                else if (hostConnection && hostConnection.open) hostConnection.send(moveData);
-            }
-
-            // 2. 射撃計算 (クールダウン制御によるホールド連射)
-            if (shootCooldown > 0) shootCooldown--;
-
-            let wantToShoot = false;
-            let targetX = 0, targetY = 0;
-
-            if (isMouseDown) {
-                wantToShoot = true;
-                targetX = mousePos.x;
-                targetY = mousePos.y;
-            } else if (shootTouchId !== null) {
-                wantToShoot = true;
-                targetX = shootTarget.x;
-                targetY = shootTarget.y;
-            }
-
-            if (wantToShoot && shootCooldown <= 0) {
-                shootCooldown = SHOOT_INTERVAL;
-                fireBullet(my, targetX, targetY);
-            }
-
-            // 3. 弾の移動と衝突判定
-            bullets.forEach(b => {
-                if (!b.active) return;
-                b.x += b.vx;
-                b.y += b.vy;
-
-                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
-                    b.active = false;
-                }
-
-                if (b.owner === myId) {
-                    Object.keys(players).forEach(id => {
-                        if (id === myId) return;
-                        const target = players[id];
-                        
-                        const dist = Math.hypot(b.x - target.x, b.y - target.y);
-                        if (dist < target.radius + 3) {
-                            b.active = false;
-                            my.score += 1;
-                            const spawnX = Math.random() * (canvas.width - 60) + 30;
-                            const spawnY = Math.random() * (canvas.height - 60) + 30;
-                            
-                            const hitData = {
-                                type: 'hit', targetId: id, killerId: myId,
-                                killerScore: my.score, spawnX: spawnX, spawnY: spawnY
-                            };
-
-                            target.x = spawnX;
-                            target.y = spawnY;
-
-                            if (isHost) broadcast(hitData, null);
-                            else if (hostConnection && hostConnection.open) hostConnection.send(hitData);
-                        }
-                    });
-                }
-            });
-
-            bullets = bullets.filter(b => b.active);
-        }
-
-        // --- ゲームループ（描画） ---
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // 背景グリッドｗｗ
-            ctx.strokeStyle = '#222';
-            ctx.lineWidth = 1;
-            for(let x=0; x<canvas.width; x+=40) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-            }
-            for(let y=0; y<canvas.height; y+=40) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-            }
-
-            // 弾の描画ｗｗ
-            bullets.forEach(b => {
+            // レーザーポインターの描画（残像効果風に少しブレンドしても面白いですが、まずはプレーンに）
+            if (pointerPos.active) {
+                ctx.save();
+                // 外側の光の輪
                 ctx.beginPath();
-                ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffff00';
+                ctx.arc(pointerPos.x, pointerPos.y, 12, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
                 ctx.fill();
-            });
-
-            // プレイヤーの描画ｗｗｗ
-            Object.keys(players).forEach(id => {
-                const p = players[id];
+                
+                // 中心点の強い光
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                ctx.fillStyle = p.color;
+                ctx.arc(pointerPos.x, pointerPos.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 0, 0, 1)';
                 ctx.fill();
+                ctx.restore();
+            }
 
-                ctx.fillStyle = '#fff';
-                ctx.font = '12px "Courier New"';
-                ctx.fillText(`SCORE: ${p.score}`, p.x - 25, p.y - p.radius - 5);
-            });
-
-            // スマホ用UI: バーチャルジョイスティックの描画（透過グレーで邪魔にならないように）
-            // ※タッチ操作可能なエリアの目安としてPCでも薄く表示されますでござるのよW🤔
-            ctx.beginPath();
-            ctx.arc(joyCenter.x, joyCenter.y, joyRadius, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-            ctx.lineWidth = 3;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(joyStick.x, joyStick.y, 22, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-            ctx.fill();
+            requestAnimationFrame(hostRenderLoop);
         }
 
-        function gameLoop() {
-            update();
-            draw();
-            requestAnimationFrame(gameLoop);
+        // テキストを適正幅で改行して描画するユーティリティ
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            const words = text.split('');
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n];
+                let metrics = context.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    context.fillText(line, x, y);
+                    line = words[n];
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            context.fillText(line, x, y);
         }
-
-        gameLoop();
 
         function copyLink() {
-            shareUrlInput.select();
-            shareUrlInput.setSelectionRange(0, 99999); // モバイル用ｗｗ
-            document.execCommand('copy');
-            alert('INVITE LINK COPIED!');
+            const copyText = document.getElementById("share-url");
+            copyText.select();
+            document.execCommand("copy");
+            alert("リモコン用URLをコピーしました。スマホに送って開いてください！");
+        }
+
+
+        // --- ゲスト側（スマホ）の処理 ---
+        const trackpad = document.getElementById('trackpad');
+        const fingerMarker = document.getElementById('trackpad-finger');
+        const statusGuestEl = document.getElementById('guest-status');
+
+        function initGuest() {
+            peer = new Peer();
+
+            peer.on('open', () => {
+                // ホストのIDに接続
+                conn = peer.connect(roomId);
+                
+                conn.on('open', () => {
+                    statusGuestEl.textContent = 'PCに接続完了';
+                    statusGuestEl.style.color = '#28a745';
+                });
+
+                conn.on('close', () => {
+                    statusGuestEl.textContent = '切断されました';
+                    statusGuestEl.style.color = '#dc3545';
+                });
+            });
+
+            // ボタンイベントの登録
+            document.getElementById('prev-btn').addEventListener('click', () => sendAction('nav', { dir: 'prev' }));
+            document.getElementById('next-btn').addEventListener('click', () => sendAction('nav', { dir: 'next' }));
+            
+            // メモ送信イベント
+            document.getElementById('send-memo-btn').addEventListener('click', sendMemo);
+
+            // トラックパッドのタッチ処理（正規化座標の計算）
+            const handleTouch = (e) => {
+                if (!conn || !conn.open) return;
+                if (e.touches.length === 0) return;
+
+                const touch = e.touches[0];
+                const rect = trackpad.getBoundingClientRect();
+
+                // トラックパッド内での相対位置を 0.0 〜 1.0 に変換
+                let relX = (touch.clientX - rect.left) / rect.width;
+                let relY = (touch.clientY - rect.top) / rect.height;
+
+                // はみ出しガード
+                relX = Math.max(0, Math.min(1, relX));
+                relY = Math.max(0, Math.min(1, relY));
+
+                // スマホ画面上での視覚的フィードバック（指の下のマーカー移動）
+                fingerMarker.style.display = 'block';
+                fingerMarker.style.left = `${relX * 100}%`;
+                fingerMarker.style.top = `${relY * 100}%`;
+
+                // PCへ送信
+                conn.send({
+                    type: 'pointer',
+                    x: relX,
+                    y: relY,
+                    active: true
+                });
+            };
+
+            trackpad.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouch(e); }, { passive: false });
+            trackpad.addEventListener('touchmove', (e) => { e.preventDefault(); handleTouch(e); }, { passive: false });
+            
+            const endTouch = () => {
+                fingerMarker.style.display = 'none';
+                if (conn && conn.open) {
+                    conn.send({ type: 'pointer', x: 0, y: 0, active: false });
+                }
+            };
+            trackpad.addEventListener('touchend', endTouch);
+            trackpad.addEventListener('touchcancel', endTouch);
+        }
+
+        function sendAction(type, payload) {
+            if (conn && conn.open) {
+                // type: type をモダンな短縮記法（Shorthand）で記述し、payloadを展開します
+                conn.send({ type, ...payload });
+            }
+        }
+
+        function sendMemo() {
+            const input = document.getElementById('memo-input');
+            const text = input.value.trim();
+            if (text && conn && conn.open) {
+                conn.send({ type: 'memo', text: text });
+                input.value = ''; // 送信後クリア
+            }
         }
     </script>
 </body>
