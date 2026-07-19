@@ -21,7 +21,6 @@
             box-sizing: border-box;
         }
 
-        /* 役割（ホスト/ゲスト）に応じてJavaScritで表示を切り替え */
         .view-section { display: none; }
 
         /* --- ホスト（PC/プロジェクター側）のスタイル --- */
@@ -55,7 +54,6 @@
         }
         button:hover { background: #0056b3; }
         
-        /* プレゼン画面のコンテナ */
         #presentation-stage {
             position: relative;
             width: 100%;
@@ -79,7 +77,7 @@
             background: #1e222b;
             color: #fff;
             padding: 15px;
-            touch-action: none; /* スクロールやバウンスを徹底ガード */
+            touch-action: none;
         }
         .controller-row {
             display: flex;
@@ -98,7 +96,6 @@
         }
         .nav-btn:active { background: var(--accent-color); }
         
-        /* スマホ用トラックパッドエリア */
         #trackpad {
             flex: 1;
             background: #15181f;
@@ -122,7 +119,6 @@
             pointer-events: none;
         }
 
-        /* メモ送信エリア */
         #memo-area {
             margin-top: 15px;
             display: flex;
@@ -171,19 +167,16 @@
     <div id="guest-window" class="view-section">
         <div id="status-bar">ステータス: <span id="guest-status" style="color:#ffc107;">接続中...</span></div>
         
-        <!-- スライド操作ボタン -->
         <div class="controller-row">
             <button class="nav-btn" id="prev-btn">◀ BACK</button>
             <button class="nav-btn" id="next-btn">NEXT ▶</button>
         </div>
 
-        <!-- レーザーポインター用トラックパッド -->
         <div id="trackpad">
             ここに触れてスライドをポインティング
             <div id="trackpad-finger"></div>
         </div>
 
-        <!-- PCへのテキスト転送機能 -->
         <div id="memo-area">
             <input type="text" id="memo-input" placeholder="PC画面へメッセージを送信...">
             <button id="send-memo-btn">送信</button>
@@ -191,7 +184,7 @@
     </div>
 
     <script>
-        // --- 共通の接続ロジック ---
+        // --- 共通の接続設定 ---
         const urlParams = new URLSearchParams(window.location.search);
         const roomId = urlParams.get('room');
         const isHost = !roomId;
@@ -199,11 +192,19 @@
         let peer = null;
         let conn = null;
 
-        // UI要素の取得
+        // GitHub Pagesなどの環境で確実に通信を通すためのSTUNサーバー設定
+        const peerConfig = {
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        };
+
         const hostWindow = document.getElementById('host-window');
         const guestWindow = document.getElementById('guest-window');
 
-        // ビューの切り替え
         if (isHost) {
             hostWindow.style.display = 'block';
             initHost();
@@ -218,7 +219,6 @@
         let memoText = "";
         let memoTimer = 0;
 
-        // スライドのデータ
         const slides = [
             { title: "1. P2P Webリモコンツール", desc: "WebRTCを使って、サーバーを介さずにスマホからダイレクトにPCを操作します。" },
             { title: "2. このシステムのメリット", desc: "端末間で直接データを同期するため、遅延が極めて少なく、機密性の高いプレゼンでも安心です。" },
@@ -230,11 +230,11 @@
             const linkArea = document.getElementById('link-area');
             const shareUrlInput = document.getElementById('share-url');
 
-            peer = new Peer();
+            // 確実な設定オブジェクトを渡して初期化
+            peer = new Peer(peerConfig);
 
-            // エラー監視を追加
             peer.on('error', (err) => {
-                statusEl.textContent = '接続エラー (' + err.type + ') ネットワークや共有サーバーを確認してください。';
+                statusEl.textContent = `接続エラー (${err.type})`;
                 statusEl.style.color = '#dc3545';
                 console.error('PeerJS Host Error:', err);
             });
@@ -268,7 +268,7 @@
                     pointerPos.active = data.active;
                 } else if (data.type === 'memo') {
                     memoText = data.text;
-                    memoTimer = 180; // 約3秒間表示
+                    memoTimer = 180;
                 }
             });
         }
@@ -356,10 +356,11 @@
         const statusGuestEl = document.getElementById('guest-status');
 
         function initGuest() {
-            peer = new Peer();
+            // 確実な設定オブジェクトを渡して初期化
+            peer = new Peer(peerConfig);
 
             peer.on('error', (err) => {
-                statusGuestEl.textContent = '通信エラー (' + err.type + ')';
+                statusGuestEl.textContent = `通信エラー (${err.type})`;
                 statusGuestEl.style.color = '#dc3545';
                 console.error('PeerJS Guest Error:', err);
             });
@@ -420,7 +421,6 @@
             trackpad.addEventListener('touchcancel', endTouch);
         }
 
-        // オブジェクトのプロパティを正常に展開するように修正
         function sendAction(type, payload) {
             if (conn && conn.open) {
                 conn.send({ type, ...payload });
