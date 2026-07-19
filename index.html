@@ -21,7 +21,7 @@
             box-sizing: border-box;
         }
 
-        /* 役割（ホスト/ゲスト）に応じてJavaScriptで表示を切り替え */
+        /* 役割（ホスト/ゲスト）に応じてJavaScritで表示を切り替え */
         .view-section { display: none; }
 
         /* --- ホスト（PC/プロジェクター側）のスタイル --- */
@@ -154,7 +154,7 @@
     <!-- ================= ホスト画面 (PC側) ================= -->
     <div id="host-window" class="view-section">
         <div id="setup-panel">
-            <div style="margin-bottom: 8px;">ステータス: <span id="host-status" style="font-weight:bold; color:#dc3545;">初期化中...</span></div>
+            <div style="margin-bottom: 8px;">ステータス: <span id="host-status" style="font-weight:bold; color:#ffc107;">初期化中...</span></div>
             <div id="link-area" style="display:none;">
                 <span style="font-size: 14px;">スマホで開く用のリモコンリンク:</span>
                 <input type="text" id="share-url" readonly>
@@ -163,14 +163,13 @@
         </div>
         
         <div id="presentation-stage">
-            <!-- プレゼン表示用の固定解像度キャンバス -->
             <canvas id="slide-canvas" width="800" height="500"></canvas>
         </div>
     </div>
 
     <!-- ================= ゲスト画面 (スマホ側) ================= -->
     <div id="guest-window" class="view-section">
-        <div id="status-bar">ステータス: <span id="guest-status">接続中...</span></div>
+        <div id="status-bar">ステータス: <span id="guest-status" style="color:#ffc107;">接続中...</span></div>
         
         <!-- スライド操作ボタン -->
         <div class="controller-row">
@@ -219,7 +218,7 @@
         let memoText = "";
         let memoTimer = 0;
 
-        // ダミースライドのデータ
+        // スライドのデータ
         const slides = [
             { title: "1. P2P Webリモコンツール", desc: "WebRTCを使って、サーバーを介さずにスマホからダイレクトにPCを操作します。" },
             { title: "2. このシステムのメリット", desc: "端末間で直接データを同期するため、遅延が極めて少なく、機密性の高いプレゼンでも安心です。" },
@@ -233,13 +232,12 @@
 
             peer = new Peer();
 
-            // ★ここから追記：エラーが起きたら画面に理由を表示する
+            // エラー監視を追加
             peer.on('error', (err) => {
-                statusEl.textContent = 'エラー発生: ' + err.type;
+                statusEl.textContent = '接続エラー (' + err.type + ') ネットワークや共有サーバーを確認してください。';
                 statusEl.style.color = '#dc3545';
-                console.error('PeerJS Error:', err);
+                console.error('PeerJS Host Error:', err);
             });
-            // ★ここまで追記
 
             peer.on('open', (id) => {
                 statusEl.textContent = 'スマホからの接続を待っています...';
@@ -249,25 +247,28 @@
                 linkArea.style.display = 'block';
             });
 
-            // ホスト側のCanvas描画ループを開始
+            peer.on('connection', (connection) => {
+                conn = connection;
+                statusEl.textContent = 'リモコンが接続されました！';
+                statusEl.style.color = '#28a745';
+                setupHostReceiver();
+            });
+
             requestAnimationFrame(hostRenderLoop);
         }
 
         function setupHostReceiver() {
             conn.on('data', (data) => {
                 if (data.type === 'nav') {
-                    // スライドめくりイベント
                     if (data.dir === 'next') currentSlide = Math.min(slides.length - 1, currentSlide + 1);
                     if (data.dir === 'prev') currentSlide = Math.max(0, currentSlide - 1);
                 } else if (data.type === 'pointer') {
-                    // ポインター座標情報（0.0 〜 1.0 に正規化されたもの）
                     pointerPos.x = data.x * 800;
                     pointerPos.y = data.y * 500;
                     pointerPos.active = data.active;
                 } else if (data.type === 'memo') {
-                    // テキストメモ受信
                     memoText = data.text;
-                    memoTimer = 180; // 約3秒間表示（60fps * 3）
+                    memoTimer = 180; // 約3秒間表示
                 }
             });
         }
@@ -276,16 +277,13 @@
             const canvas = document.getElementById('slide-canvas');
             const ctx = canvas.getContext('2d');
 
-            // 背景クリア
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // スライド枠線の描画
             ctx.strokeStyle = '#e9ecef';
             ctx.lineWidth = 4;
             ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
 
-            // スライドコンテンツ描画
             const slide = slides[currentSlide];
             ctx.fillStyle = '#1e222b';
             ctx.font = 'bold 32px sans-serif';
@@ -293,15 +291,12 @@
 
             ctx.fillStyle = '#495057';
             ctx.font = '20px sans-serif';
-            // 簡易的な自動改行テキスト描画
             wrapText(ctx, slide.desc, 50, 180, 700, 32);
 
-            // ページ番号
             ctx.fillStyle = '#adb5bd';
             ctx.font = '14px monospace';
             ctx.fillText(`PAGE: ${currentSlide + 1} / ${slides.length}`, 50, 450);
 
-            // 受信したテキストメモ（画面下部にポップアップ表示）
             if (memoTimer > 0) {
                 memoTimer--;
                 ctx.save();
@@ -313,16 +308,13 @@
                 ctx.restore();
             }
 
-            // レーザーポインターの描画（残像効果風に少しブレンドしても面白いですが、まずはプレーンに）
             if (pointerPos.active) {
                 ctx.save();
-                // 外側の光の輪
                 ctx.beginPath();
                 ctx.arc(pointerPos.x, pointerPos.y, 12, 0, Math.PI * 2);
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
                 ctx.fill();
                 
-                // 中心点の強い光
                 ctx.beginPath();
                 ctx.arc(pointerPos.x, pointerPos.y, 4, 0, Math.PI * 2);
                 ctx.fillStyle = 'rgba(255, 0, 0, 1)';
@@ -333,7 +325,6 @@
             requestAnimationFrame(hostRenderLoop);
         }
 
-        // テキストを適正幅で改行して描画するユーティリティ
         function wrapText(context, text, x, y, maxWidth, lineHeight) {
             const words = text.split('');
             let line = '';
@@ -367,8 +358,13 @@
         function initGuest() {
             peer = new Peer();
 
+            peer.on('error', (err) => {
+                statusGuestEl.textContent = '通信エラー (' + err.type + ')';
+                statusGuestEl.style.color = '#dc3545';
+                console.error('PeerJS Guest Error:', err);
+            });
+
             peer.on('open', () => {
-                // ホストのIDに接続
                 conn = peer.connect(roomId);
                 
                 conn.on('open', () => {
@@ -382,14 +378,10 @@
                 });
             });
 
-            // ボタンイベントの登録
             document.getElementById('prev-btn').addEventListener('click', () => sendAction('nav', { dir: 'prev' }));
             document.getElementById('next-btn').addEventListener('click', () => sendAction('nav', { dir: 'next' }));
-            
-            // メモ送信イベント
             document.getElementById('send-memo-btn').addEventListener('click', sendMemo);
 
-            // トラックパッドのタッチ処理（正規化座標の計算）
             const handleTouch = (e) => {
                 if (!conn || !conn.open) return;
                 if (e.touches.length === 0) return;
@@ -397,20 +389,16 @@
                 const touch = e.touches[0];
                 const rect = trackpad.getBoundingClientRect();
 
-                // トラックパッド内での相対位置を 0.0 〜 1.0 に変換
                 let relX = (touch.clientX - rect.left) / rect.width;
                 let relY = (touch.clientY - rect.top) / rect.height;
 
-                // はみ出しガード
                 relX = Math.max(0, Math.min(1, relX));
                 relY = Math.max(0, Math.min(1, relY));
 
-                // スマホ画面上での視覚的フィードバック（指の下のマーカー移動）
                 fingerMarker.style.display = 'block';
                 fingerMarker.style.left = `${relX * 100}%`;
                 fingerMarker.style.top = `${relY * 100}%`;
 
-                // PCへ送信
                 conn.send({
                     type: 'pointer',
                     x: relX,
@@ -432,9 +420,9 @@
             trackpad.addEventListener('touchcancel', endTouch);
         }
 
+        // オブジェクトのプロパティを正常に展開するように修正
         function sendAction(type, payload) {
             if (conn && conn.open) {
-                // type: type をモダンな短縮記法（Shorthand）で記述し、payloadを展開します
                 conn.send({ type, ...payload });
             }
         }
@@ -444,7 +432,7 @@
             const text = input.value.trim();
             if (text && conn && conn.open) {
                 conn.send({ type: 'memo', text: text });
-                input.value = ''; // 送信後クリア
+                input.value = '';
             }
         }
     </script>
