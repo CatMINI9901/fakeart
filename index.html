@@ -2,339 +2,525 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P オンラインお絵描きボード</title>
-    <!-- PeerJSの読み込み（WebRTCのシグナリングを簡素化するライブラリ） -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P リアルタイム2Dアリーナ（スマホ対応版）</title>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         :root {
-            --bg-color: #f0f2f5;
-            --panel-bg: #ffffff;
-            --border-color: #ccc;
+            --bg-color: #1a1a1a;
+            --panel-bg: #2d2d2d;
+            --text-color: #ffffff;
+            --border-color: #444;
         }
         body {
-            font-family: sans-serif;
+            font-family: 'Courier New', Courier, monospace;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             background-color: var(--bg-color);
+            color: var(--text-color);
             display: flex;
             flex-direction: column;
             align-items: center;
+            /* スマホでの引っ張り更新やバウンススクロールを防止 */
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
         }
         h1 {
-            margin-bottom: 10px;
-            color: #333;
+            font-size: 20px;
+            margin: 5px 0;
         }
         #connection-panel {
             background: var(--panel-bg);
-            padding: 15px;
+            padding: 10px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 10px;
             width: 100%;
             max-width: 800px;
             box-sizing: border-box;
             text-align: center;
-        }
-        #link-area {
-            margin-top: 10px;
-            display: none;
+            font-size: 12px;
         }
         #share-url {
-            width: 70%;
-            padding: 5px;
-            font-size: 14px;
+            width: 50%;
+            padding: 4px;
+            background: #111;
+            color: #0f0;
+            border: 1px solid var(--border-color);
+            font-size: 12px;
         }
         button {
-            padding: 6px 12px;
+            padding: 4px 10px;
             cursor: pointer;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 12px;
         }
         button:hover { background-color: #0056b3; }
-        #toolbar {
-            background: var(--panel-bg);
-            padding: 10px;
-            border-radius: 8px 8px 0 0;
-            border: 1px solid var(--border-color);
-            border-bottom: none;
-            width: 100%;
-            max-width: 800px;
-            box-sizing: border-box;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .tool-item { display: flex; align-items: center; gap: 5px; }
         canvas {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 0 0 8px 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            cursor: crosshair;
+            background: #000000;
+            border: 2px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
             max-width: 100%;
+            max-height: 70vh;
             height: auto;
+            /* スマホでの標準ジェスチャー（スクロールやピンチ）を無効化 */
+            touch-action: none; 
         }
-        #status { font-weight: bold; color: #666; }
-        .connected { color: #28a745 !important; }
+        #status { font-weight: bold; color: #ff3333; }
+        .connected { color: #00ff00 !important; }
+        #instructions {
+            margin-top: 5px;
+            font-size: 11px;
+            color: #aaa;
+        }
     </style>
 </head>
 <body>
 
-    <h1>P2P オンラインお絵描き</h1>
+    <h1>P2P ARENA SHOOTER</h1>
 
-    <!-- 接続管理パネル -->
     <div id="connection-panel">
-        <div>ステータス: <span id="status">初期化中...</span></div>
-        <div id="link-area">
-            <p>ゲストを招待するためのリンク:</p>
+        <div>STATUS: <span id="status">INITIALIZING...</span></div>
+        <div id="link-area" style="display: none; margin-top: 5px;">
             <input type="text" id="share-url" readonly>
-            <button onclick="copyLink()">リンクをコピー</button>
+            <button onclick="copyLink()">COPY LINK</button>
         </div>
+        <div id="instructions">PC: [WASD]移動 / クリック射撃 | スマホ: [画面左下]スライド移動 / [画面右側]タッチ連射</div>
     </div>
 
-    <!-- お絵描きツールバー -->
-    <div id="toolbar">
-        <div class="tool-item">
-            <label for="color-picker">色:</label>
-            <input type="color" id="color-picker" value="#000000">
-        </div>
-        <div class="tool-item">
-            <label for="size-slider">太さ:</label>
-            <input type="range" id="size-slider" min="1" max="20" value="5">
-            <span id="size-val">5</span>
-        </div>
-        <button id="clear-btn" style="background-color: #dc3545;">全消去</button>
-    </div>
-
-    <!-- キャンバス（座標ズレを防ぐため内部解像度を固定） -->
-    <canvas id="paint-canvas" width="800" height="600"></canvas>
+    <canvas id="game-canvas" width="800" height="600"></canvas>
 
     <script>
-        const canvas = document.getElementById('paint-canvas');
+        const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
-        const colorPicker = document.getElementById('color-picker');
-        const sizeSlider = document.getElementById('size-slider');
-        const sizeVal = document.getElementById('size-val');
-        const clearBtn = document.getElementById('clear-btn');
         const statusEl = document.getElementById('status');
         const linkArea = document.getElementById('link-area');
         const shareUrlInput = document.getElementById('share-url');
 
-        // 太さ表示の更新
-        sizeSlider.addEventListener('input', () => sizeVal.textContent = sizeSlider.value);
+        // --- ゲームの状態管理 ---
+        const myId = Math.random().toString(36).substring(2, 9);
+        let players = {};
+        let bullets = [];
+        let keys = {};
 
-        // お絵描きに関する状態管理
-        let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
+        // 射撃クールダウン（押しっぱなし連射用）
+        let shootCooldown = 0;
+        const SHOOT_INTERVAL = 12; // 射撃間隔（フレーム数）
 
-        // P2Pネットワークに関する状態管理
+        // ローカルプレイヤーの初期設定
+        let myColor = '#00ffff';
+        players[myId] = {
+            x: 100,
+            y: 300,
+            radius: 15,
+            color: myColor,
+            score: 0
+        };
+
+        // --- スマホ用バーチャル操作の状態管理 ---
+        let joyCenter = { x: 110, y: 490 }; // ジョイスティックの中心位置
+        let joyStick = { x: 110, y: 490 };  // 内側のつまみの位置
+        let joyRadius = 60;                 // 可動半径
+        let joyTouchId = null;              // 移動に使っている指の識別ID
+        let touchMoveDir = { x: 0, y: 0 };  // 移動ベクトル（-1.0 〜 1.0）
+
+        let shootTouchId = null;            // 射撃に使っている指の識別ID
+        let shootTarget = { x: 0, y: 0 };   // 射撃の標的座標
+        let isMouseDown = false;            // PC用：マウスが押されているか
+        let mousePos = { x: 0, y: 0 };      // PC用：マウス座標
+
+        // --- P2P ネットワーク管理 ---
         let peer = null;
-        let connections = []; // ホスト用：接続された全ゲストのリスト
-        let hostConnection = null; // ゲスト用：ホストへの接続オブジェクト
+        let connections = [];
+        let hostConnection = null;
         let isHost = true;
 
-        // URLパラメータからルームID（ホストのPeerID）を取得
         const urlParams = new URLSearchParams(window.location.search);
         const roomId = urlParams.get('room');
-
         if (roomId) {
             isHost = false;
+            myColor = '#ff00ff';
+            players[myId].color = myColor;
+            players[myId].x = 700;
+            players[myId].y = 300;
         }
 
-        // --- PeerJS 初期化 ---
-        // ランダムなIDでPeerオブジェクトを作成（PeerJSの公開サーバーを利用）
         peer = new Peer();
 
         peer.on('open', (id) => {
             if (isHost) {
-                statusEl.textContent = '待機中（ホスト）';
-                statusEl.className = 'connected';
-                // 招待リンクの生成
+                statusEl.textContent = 'WAITING FOR OPPONENT...';
                 const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${id}`;
                 shareUrlInput.value = inviteUrl;
                 linkArea.style.display = 'block';
             } else {
-                statusEl.textContent = 'ホストに接続中...';
-                // ゲストとしてホストへ接続を試みる
+                statusEl.textContent = 'CONNECTING TO HOST...';
                 const conn = peer.connect(roomId);
                 setupConnection(conn);
             }
         });
 
-        peer.on('error', (err) => {
-            console.error(err);
-            statusEl.textContent = 'エラーが発生しました: ' + err.type;
-            statusEl.className = '';
-        });
-
-        // ホスト側：ゲストからの接続を待ち受けるイベント
         peer.on('connection', (conn) => {
             if (isHost) {
                 connections.push(conn);
-                statusEl.textContent = `接続中 (参加者: ${connections.length}人)`;
+                statusEl.textContent = 'READY TO FIGHT';
+                statusEl.className = 'connected';
                 setupConnection(conn);
+                sendInitState(conn);
             }
         });
 
-        // --- 通信データの処理設定 ---
         function setupConnection(conn) {
-            if (!isHost) {
-                hostConnection = conn;
-            }
+            if (!isHost) hostConnection = conn;
 
             conn.on('open', () => {
                 if (!isHost) {
-                    statusEl.textContent = 'オンライン（ゲストとして接続完了）';
+                    statusEl.textContent = 'CONNECTED TO HOST';
                     statusEl.className = 'connected';
                 }
             });
 
-            // メッセージ（描画データ）を受信したときの処理
             conn.on('data', (data) => {
-                if (data.type === 'draw') {
-                    // 受信した座標で線を描画
-                    drawOnCanvas(data.x1, data.y1, data.x2, data.y2, data.color, data.size);
-                    
-                    // ホストの場合は、他のすべてのゲストにこの描画データを転送（ブロードキャスト）
-                    if (isHost) {
-                        broadcast(data, conn.peer);
-                    }
-                } else if (data.type === 'clear') {
-                    localClear();
-                    if (isHost) {
-                        broadcast(data, conn.peer);
-                    }
+                switch(data.type) {
+                    case 'init':
+                        Object.keys(data.players).forEach(id => {
+                            if(id !== myId) players[id] = data.players[id];
+                        });
+                        break;
+
+                    case 'move':
+                        if (!players[data.id]) {
+                            players[data.id] = { radius: 15, score: 0 };
+                        }
+                        players[data.id].x = data.x;
+                        players[data.id].y = data.y;
+                        players[data.id].color = data.color;
+                        players[data.id].score = data.score;
+                        if (isHost) broadcast(data, conn.peer);
+                        break;
+
+                    case 'shoot':
+                        bullets.push({
+                            x: data.x, y: data.y, vx: data.vx, vy: data.vy,
+                            owner: data.owner, active: true
+                        });
+                        if (isHost) broadcast(data, conn.peer);
+                        break;
+
+                    case 'hit':
+                        if (players[data.targetId]) {
+                            players[data.targetId].x = data.spawnX;
+                            players[data.targetId].y = data.spawnY;
+                        }
+                        if (players[data.killerId]) {
+                            players[data.killerId].score = data.killerScore;
+                        }
+                        if (isHost) broadcast(data, conn.peer);
+                        break;
                 }
             });
 
             conn.on('close', () => {
                 if (isHost) {
                     connections = connections.filter(c => c.peer !== conn.peer);
-                    statusEl.textContent = connections.length > 0 ? `接続中 (参加者: ${connections.length}人)` : '待機中（ホスト）';
+                    if(connections.length === 0) statusEl.textContent = 'WAITING FOR OPPONENT...';
                 } else {
-                    statusEl.textContent = 'ホストとの接続が切断されました';
+                    statusEl.textContent = 'DISCONNECTED';
                     statusEl.className = '';
                 }
             });
         }
 
-        // 全員にデータを転送する関数（送信元を除く）
         function broadcast(data, excludePeerId) {
             connections.forEach(conn => {
-                if (conn.peer !== excludePeerId && conn.open) {
-                    conn.send(data);
-                }
+                if (conn.peer !== excludePeerId && conn.open) conn.send(data);
             });
         }
 
-        // --- 描画ロジック ---
-        function drawOnCanvas(x1, y1, x2, y2, color, size) {
-            ctx.beginPath();
-            ctx.strokeStyle = color;
-            ctx.lineWidth = size;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            ctx.stroke();
-            ctx.closePath();
+        function sendInitState(conn) {
+            conn.send({ type: 'init', players: players });
         }
 
-        // マウス/タッチ座標をCanvasの内部解像度に変換する関数
-        function getCanvasCoordinates(e) {
+
+        // --- タッチ＆マウス座標の変換ユーティリティ ---
+        function getCanvasCoordinates(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            // タッチイベントとマウスイベントの双方に対応
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            
             return {
                 x: (clientX - rect.left) * (canvas.width / rect.width),
                 y: (clientY - rect.top) * (canvas.height / rect.height)
             };
         }
 
-        function startDrawing(e) {
-            isDrawing = true;
-            const coords = getCanvasCoordinates(e);
-            lastX = coords.x;
-            lastY = coords.y;
+        // --- タッチイベント処理（マルチタッチ対応） ---
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // スクロールなどを完全にガード
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                const coords = getCanvasCoordinates(touch.clientX, touch.clientY);
+
+                // 画面の左下エリア（Xが半分より左、かつYが半分より下）ならジョイスティックとして判定
+                if (coords.x < canvas.width / 2 && coords.y > canvas.height / 2) {
+                    if (joyTouchId === null) {
+                        joyTouchId = touch.identifier;
+                        updateJoystick(coords);
+                    }
+                } else {
+                    // それ以外のエリアは射撃ターゲットとして判定
+                    if (shootTouchId === null) {
+                        shootTouchId = touch.identifier;
+                        shootTarget = coords;
+                    }
+                }
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                const coords = getCanvasCoordinates(touch.clientX, touch.clientY);
+
+                if (touch.identifier === joyTouchId) {
+                    updateJoystick(coords);
+                } else if (touch.identifier === shootTouchId) {
+                    shootTarget = coords;
+                }
+            }
+        }, { passive: false });
+
+        const endTouchHandler = (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                if (touch.identifier === joyTouchId) {
+                    joyTouchId = null;
+                    joyStick = { ...joyCenter }; // スティックを中央に戻す
+                    touchMoveDir = { x: 0, y: 0 };
+                } else if (touch.identifier === shootTouchId) {
+                    shootTouchId = null;
+                }
+            }
+        };
+        canvas.addEventListener('touchend', endTouchHandler);
+        canvas.addEventListener('touchcancel', endTouchHandler);
+
+        function updateJoystick(coords) {
+            const dx = coords.x - joyCenter.x;
+            const dy = coords.y - joyCenter.y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist <= joyRadius) {
+                joyStick.x = coords.x;
+                joyStick.y = coords.y;
+            } else {
+                joyStick.x = joyCenter.x + (dx / dist) * joyRadius;
+                joyStick.y = joyCenter.y + (dy / dist) * joyRadius;
+            }
+
+            // 移動比率を計算 (-1.0 〜 1.0)
+            touchMoveDir.x = (joyStick.x - joyCenter.x) / joyRadius;
+            touchMoveDir.y = (joyStick.y - joyCenter.y) / joyRadius;
         }
 
-        function draw(e) {
-            if (!isDrawing) return;
-            e.preventDefault(); // スクロール等の標準動作を防止
 
-            const coords = getCanvasCoordinates(e);
-            const currentX = coords.x;
-            const currentY = coords.y;
-            const color = colorPicker.value;
-            const size = sizeSlider.value;
+        // --- PC用 マウス/キーボードイベント処理 ---
+        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
-            // 1. ローカルのキャンバスに描画
-            drawOnCanvas(lastX, lastY, currentX, currentY, color, size);
+        canvas.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            updateMousePos(e);
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (isMouseDown) updateMousePos(e);
+        });
+        window.addEventListener('mouseup', () => isMouseDown = false);
 
-            // 2. ネットワーク上の相手にデータを送信
-            const drawData = {
-                type: 'draw',
-                x1: lastX,
-                y1: lastY,
-                x2: currentX,
-                y2: currentY,
-                color: color,
-                size: size
+        function updateMousePos(e) {
+            const coords = getCanvasCoordinates(e.clientX, e.clientY);
+            mousePos.x = coords.x;
+            mousePos.y = coords.y;
+        }
+
+
+        // --- 弾の発射処理 ---
+        function fireBullet(p, tX, tY) {
+            const angle = Math.atan2(tY - p.y, tX - p.x);
+            const bulletSpeed = 7;
+            const bulletData = {
+                type: 'shoot',
+                x: p.x + Math.cos(angle) * (p.radius + 5),
+                y: p.y + Math.sin(angle) * (p.radius + 5),
+                vx: Math.cos(angle) * bulletSpeed,
+                vy: Math.sin(angle) * bulletSpeed,
+                owner: myId
             };
 
-            if (isHost) {
-                broadcast(drawData, null); // ゲスト全員に送信
-            } else if (hostConnection && hostConnection.open) {
-                hostConnection.send(drawData); // ホストに送信
+            bullets.push({ x: bulletData.x, y: bulletData.y, vx: bulletData.vx, vy: bulletData.vy, owner: myId, active: true });
+
+            if (isHost) broadcast(bulletData, null);
+            else if (hostConnection && hostConnection.open) hostConnection.send(bulletData);
+        }
+
+
+        // --- ゲームループ（計算） ---
+        function update() {
+            const my = players[myId];
+            if (!my) return;
+
+            let moved = false;
+            const speed = 4;
+
+            // 1. 移動計算 (キーボード)
+            if (keys['w'] || keys['arrowup']) { my.y -= speed; moved = true; }
+            if (keys['s'] || keys['arrowdown']) { my.y += speed; moved = true; }
+            if (keys['a'] || keys['arrowleft']) { my.x -= speed; moved = true; }
+            if (keys['d'] || keys['arrowright']) { my.x += speed; moved = true; }
+
+            // 1. 移動計算 (スマホジョイスティック入力を合成)
+            if (touchMoveDir.x !== 0 || touchMoveDir.y !== 0) {
+                my.x += touchMoveDir.x * speed;
+                my.y += touchMoveDir.y * speed;
+                moved = true;
             }
 
-            lastX = currentX;
-            lastY = currentY;
+            my.x = Math.max(my.radius, Math.min(canvas.width - my.radius, my.x));
+            my.y = Math.max(my.radius, Math.min(canvas.height - my.radius, my.y));
+
+            if (moved) {
+                const moveData = { type: 'move', id: myId, x: my.x, y: my.y, color: my.color, score: my.score };
+                if (isHost) broadcast(moveData, null);
+                else if (hostConnection && hostConnection.open) hostConnection.send(moveData);
+            }
+
+            // 2. 射撃計算 (クールダウン制御によるホールド連射)
+            if (shootCooldown > 0) shootCooldown--;
+
+            let wantToShoot = false;
+            let targetX = 0, targetY = 0;
+
+            if (isMouseDown) {
+                wantToShoot = true;
+                targetX = mousePos.x;
+                targetY = mousePos.y;
+            } else if (shootTouchId !== null) {
+                wantToShoot = true;
+                targetX = shootTarget.x;
+                targetY = shootTarget.y;
+            }
+
+            if (wantToShoot && shootCooldown <= 0) {
+                shootCooldown = SHOOT_INTERVAL;
+                fireBullet(my, targetX, targetY);
+            }
+
+            // 3. 弾の移動と衝突判定
+            bullets.forEach(b => {
+                if (!b.active) return;
+                b.x += b.vx;
+                b.y += b.vy;
+
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    b.active = false;
+                }
+
+                if (b.owner === myId) {
+                    Object.keys(players).forEach(id => {
+                        if (id === myId) return;
+                        const target = players[id];
+                        
+                        const dist = Math.hypot(b.x - target.x, b.y - target.y);
+                        if (dist < target.radius + 3) {
+                            b.active = false;
+                            my.score += 1;
+                            const spawnX = Math.random() * (canvas.width - 60) + 30;
+                            const spawnY = Math.random() * (canvas.height - 60) + 30;
+                            
+                            const hitData = {
+                                type: 'hit', targetId: id, killerId: myId,
+                                killerScore: my.score, spawnX: spawnX, spawnY: spawnY
+                            };
+
+                            target.x = spawnX;
+                            target.y = spawnY;
+
+                            if (isHost) broadcast(hitData, null);
+                            else if (hostConnection && hostConnection.open) hostConnection.send(hitData);
+                        }
+                    });
+                }
+            });
+
+            bullets = bullets.filter(b => b.active);
         }
 
-        function stopDrawing() {
-            isDrawing = false;
-        }
-
-        // イベントリスナーの登録（マウス）
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        window.addEventListener('mouseup', stopDrawing);
-
-        // イベントリスナーの登録（スマホ・タブレット等のタッチ）
-        canvas.addEventListener('touchstart', startDrawing, { passive: false });
-        canvas.addEventListener('touchmove', draw, { passive: false });
-        window.addEventListener('touchend', stopDrawing);
-
-        // --- クリア（全消去）処理 ---
-        function localClear() {
+        // --- ゲームループ（描画） ---
+        function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 背景グリッドｗｗ
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            for(let x=0; x<canvas.width; x+=40) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for(let y=0; y<canvas.height; y+=40) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            // 弾の描画ｗｗ
+            bullets.forEach(b => {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffff00';
+                ctx.fill();
+            });
+
+            // プレイヤーの描画ｗｗｗ
+            Object.keys(players).forEach(id => {
+                const p = players[id];
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px "Courier New"';
+                ctx.fillText(`SCORE: ${p.score}`, p.x - 25, p.y - p.radius - 5);
+            });
+
+            // スマホ用UI: バーチャルジョイスティックの描画（透過グレーで邪魔にならないように）
+            // ※タッチ操作可能なエリアの目安としてPCでも薄く表示されますでござるのよW🤔
+            ctx.beginPath();
+            ctx.arc(joyCenter.x, joyCenter.y, joyRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(joyStick.x, joyStick.y, 22, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.fill();
         }
 
-        clearBtn.addEventListener('click', () => {
-            localClear();
-            const clearData = { type: 'clear' };
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
 
-            if (isHost) {
-                broadcast(clearData, null);
-            } else if (hostConnection && hostConnection.open) {
-                hostConnection.send(clearData);
-            }
-        });
+        gameLoop();
 
-        // ユーティリティ: リンクコピー用
         function copyLink() {
             shareUrlInput.select();
+            shareUrlInput.setSelectionRange(0, 99999); // モバイル用ｗｗ
             document.execCommand('copy');
-            alert('招待リンクをクリップボードにコピーしました！ゲストに共有してください。');
+            alert('INVITE LINK COPIED!');
         }
     </script>
 </body>
