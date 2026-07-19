@@ -233,19 +233,20 @@
 
             peer = new Peer();
 
+            // ★ここから追記：エラーが起きたら画面に理由を表示する
+            peer.on('error', (err) => {
+                statusEl.textContent = 'エラー発生: ' + err.type;
+                statusEl.style.color = '#dc3545';
+                console.error('PeerJS Error:', err);
+            });
+            // ★ここまで追記
+
             peer.on('open', (id) => {
                 statusEl.textContent = 'スマホからの接続を待っています...';
                 statusEl.style.color = '#ffc107';
                 const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${id}`;
                 shareUrlInput.value = inviteUrl;
                 linkArea.style.display = 'block';
-            });
-
-            peer.on('connection', (connection) => {
-                conn = connection;
-                statusEl.textContent = 'リモコンが接続されました！';
-                statusEl.style.color = '#28a745';
-                setupHostReceiver();
             });
 
             // ホスト側のCanvas描画ループを開始
