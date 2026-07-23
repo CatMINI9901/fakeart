@@ -2,339 +2,757 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P オンラインお絵描きボード</title>
-    <!-- PeerJSの読み込み（WebRTCのシグナリングを簡素化するライブラリ） -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D P2P ガンシューティング & 建築</title>
+    <!-- PeerJS & Three.js 読み込み -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root {
-            --bg-color: #f0f2f5;
-            --panel-bg: #ffffff;
-            --border-color: #ccc;
+            --panel-bg: rgba(20, 20, 20, 0.9);
+            --border-color: #444;
+            --text-color: #ffffff;
+        }
+        * {
+            box-sizing: border-box;
+            touch-action: none; /* スマホのスクロールやズームを防止 */
         }
         body {
-            font-family: sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding: 20px;
-            background-color: var(--bg-color);
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            color: var(--text-color);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* クロスヘア & HUD */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 5;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        #crosshair::before { top: 5px; left: -6px; width: 24px; height: 2px; }
+        #crosshair::after { top: -6px; left: 5px; width: 2px; height: 24px; }
+
+        #hud {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 5;
+            background: var(--panel-bg);
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            pointer-events: none;
+        }
+        .hp-bar-bg {
+            width: 160px;
+            height: 14px;
+            background: #444;
+            border-radius: 7px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        #hp-bar {
+            width: 100%;
+            height: 100%;
+            background: #28a745;
+            transition: width 0.2s;
+        }
+
+        /* スマホ用タッチUI */
+        #mobile-controls {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .touch-btn {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.25);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .touch-btn:active {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        #btn-menu {
+            position: absolute;
+            top: 15px; right: 15px;
+            width: 50px; height: 40px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid #666;
+            font-size: 12px;
+        }
+        #btn-shoot {
+            position: absolute;
+            bottom: 30px; right: 25px;
+            width: 70px; height: 70px;
+            background: rgba(220, 53, 69, 0.6);
+            font-size: 16px;
+        }
+        #btn-build {
+            position: absolute;
+            bottom: 115px; right: 25px;
+            width: 60px; height: 60px;
+            background: rgba(40, 167, 69, 0.6);
+        }
+        #btn-jump {
+            position: absolute;
+            bottom: 30px; right: 110px;
+            width: 60px; height: 60px;
+            background: rgba(0, 123, 255, 0.6);
+        }
+        #joystick-zone {
+            position: absolute;
+            bottom: 25px; left: 25px;
+            width: 120px; height: 120px;
+            background: rgba(255,255,255,0.1);
+            border: 2px dashed rgba(255,255,255,0.3);
+            border-radius: 50%;
+            pointer-events: auto;
+        }
+        #joystick-knob {
+            position: absolute;
+            top: 35px; left: 35px;
+            width: 50px; height: 50px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        #look-zone {
+            position: absolute;
+            top: 0; right: 0;
+            width: 60%; height: 100%;
+            pointer-events: auto;
+        }
+
+        /* ESC / ポーズ画面 */
+        #blocker {
+            position: absolute;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
             display: flex;
             flex-direction: column;
+            justify-content: center;
             align-items: center;
+            z-index: 20;
+            cursor: pointer;
         }
-        h1 {
-            margin-bottom: 10px;
-            color: #333;
-        }
-        #connection-panel {
+        #instructions {
             background: var(--panel-bg);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 15px;
-            width: 100%;
-            max-width: 800px;
-            box-sizing: border-box;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
             text-align: center;
+            width: 90%;
+            max-width: 480px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.8);
         }
-        #link-area {
-            margin-top: 10px;
-            display: none;
+        #instructions h2 { margin-top: 0; color: #4da6ff; }
+
+        /* ESC画面内の接続パネル */
+        #connection-panel {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(40, 40, 40, 0.8);
+            border-radius: 8px;
+            border: 1px solid #555;
+            cursor: default;
         }
+        #link-area { margin-top: 8px; display: none; }
         #share-url {
-            width: 70%;
-            padding: 5px;
-            font-size: 14px;
+            width: 100%;
+            padding: 8px;
+            font-size: 13px;
+            border-radius: 4px;
+            border: 1px solid #666;
+            background: #111;
+            color: #00ffcc;
+            text-align: center;
+            margin-bottom: 8px;
+            cursor: text;
+            touch-action: auto;
         }
         button {
-            padding: 6px 12px;
+            padding: 8px 16px;
             cursor: pointer;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 4px;
-            font-size: 14px;
+            font-weight: bold;
+            font-size: 13px;
+            touch-action: auto;
         }
         button:hover { background-color: #0056b3; }
-        #toolbar {
-            background: var(--panel-bg);
-            padding: 10px;
-            border-radius: 8px 8px 0 0;
-            border: 1px solid var(--border-color);
-            border-bottom: none;
-            width: 100%;
-            max-width: 800px;
-            box-sizing: border-box;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .tool-item { display: flex; align-items: center; gap: 5px; }
-        canvas {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 0 0 8px 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            cursor: crosshair;
-            max-width: 100%;
-            height: auto;
-        }
-        #status { font-weight: bold; color: #666; }
+
+        #status { font-weight: bold; color: #ffc107; }
         .connected { color: #28a745 !important; }
     </style>
 </head>
 <body>
 
-    <h1>P2P オンラインお絵描き</h1>
-
-    <!-- 接続管理パネル -->
-    <div id="connection-panel">
-        <div>ステータス: <span id="status">初期化中...</span></div>
-        <div id="link-area">
-            <p>ゲストを招待するためのリンク:</p>
-            <input type="text" id="share-url" readonly>
-            <button onclick="copyLink()">リンクをコピー</button>
-        </div>
+    <!-- クロスヘア & HUD -->
+    <div id="crosshair"></div>
+    <div id="hud">
+        <div style="font-size: 14px;">HP: <span id="hp-val">100</span> / 100</div>
+        <div class="hp-bar-bg"><div id="hp-bar"></div></div>
     </div>
 
-    <!-- お絵描きツールバー -->
-    <div id="toolbar">
-        <div class="tool-item">
-            <label for="color-picker">色:</label>
-            <input type="color" id="color-picker" value="#000000">
-        </div>
-        <div class="tool-item">
-            <label for="size-slider">太さ:</label>
-            <input type="range" id="size-slider" min="1" max="20" value="5">
-            <span id="size-val">5</span>
-        </div>
-        <button id="clear-btn" style="background-color: #dc3545;">全消去</button>
+    <!-- スマホ用タッチ操作レイヤー -->
+    <div id="mobile-controls">
+        <div id="look-zone"></div>
+        <div id="joystick-zone"><div id="joystick-knob"></div></div>
+        <button id="btn-menu" class="touch-btn">MENU</button>
+        <button id="btn-shoot" class="touch-btn">撃つ</button>
+        <button id="btn-build" class="touch-btn">壁</button>
+        <button id="btn-jump" class="touch-btn">跳ぶ</button>
     </div>
 
-    <!-- キャンバス（座標ズレを防ぐため内部解像度を固定） -->
-    <canvas id="paint-canvas" width="800" height="600"></canvas>
+    <!-- ポーズ / 案内画面 -->
+    <div id="blocker">
+        <div id="instructions">
+            <h2>ポーズ中 / プレイ開始</h2>
+            <p style="font-size: 13px; color: #ccc; margin-bottom: 10px;">
+                画面の枠外をタップ/クリックしてゲーム開始
+            </p>
+            
+            <div id="connection-panel" onclick="event.stopPropagation();">
+                <div style="font-size: 14px;">ステータス: <span id="status">初期化中...</span></div>
+                <div id="link-area">
+                    <p style="font-size: 12px; margin: 8px 0 4px 0; color: #aaa;">招待リンク（友達に共有）:</p>
+                    <input type="text" id="share-url" readonly onclick="this.select(); event.stopPropagation();">
+                    <button onclick="copyLink(event)">リンクをコピー</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const canvas = document.getElementById('paint-canvas');
-        const ctx = canvas.getContext('2d');
-        const colorPicker = document.getElementById('color-picker');
-        const sizeSlider = document.getElementById('size-slider');
-        const sizeVal = document.getElementById('size-val');
-        const clearBtn = document.getElementById('clear-btn');
+        // スマホ判定
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        if (isTouchDevice) {
+            document.getElementById('mobile-controls').style.display = 'block';
+        }
+
+        // --- ネットワーク状態管理 ---
+        let peer = null;
+        let connections = []; 
+        let hostConnection = null; 
+        let isHost = true;
+        let myPeerId = null;
+
         const statusEl = document.getElementById('status');
         const linkArea = document.getElementById('link-area');
         const shareUrlInput = document.getElementById('share-url');
 
-        // 太さ表示の更新
-        sizeSlider.addEventListener('input', () => sizeVal.textContent = sizeSlider.value);
-
-        // お絵描きに関する状態管理
-        let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
-
-        // P2Pネットワークに関する状態管理
-        let peer = null;
-        let connections = []; // ホスト用：接続された全ゲストのリスト
-        let hostConnection = null; // ゲスト用：ホストへの接続オブジェクト
-        let isHost = true;
-
-        // URLパラメータからルームID（ホストのPeerID）を取得
         const urlParams = new URLSearchParams(window.location.search);
         const roomId = urlParams.get('room');
 
-        if (roomId) {
-            isHost = false;
-        }
+        if (roomId) isHost = false;
 
-        // --- PeerJS 初期化 ---
-        // ランダムなIDでPeerオブジェクトを作成（PeerJSの公開サーバーを利用）
+        // --- PeerJSの初期化 ---
         peer = new Peer();
 
         peer.on('open', (id) => {
+            myPeerId = id;
             if (isHost) {
                 statusEl.textContent = '待機中（ホスト）';
                 statusEl.className = 'connected';
-                // 招待リンクの生成
                 const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${id}`;
                 shareUrlInput.value = inviteUrl;
                 linkArea.style.display = 'block';
             } else {
                 statusEl.textContent = 'ホストに接続中...';
-                // ゲストとしてホストへ接続を試みる
                 const conn = peer.connect(roomId);
                 setupConnection(conn);
             }
         });
 
-        peer.on('error', (err) => {
-            console.error(err);
-            statusEl.textContent = 'エラーが発生しました: ' + err.type;
-            statusEl.className = '';
-        });
-
-        // ホスト側：ゲストからの接続を待ち受けるイベント
         peer.on('connection', (conn) => {
             if (isHost) {
                 connections.push(conn);
-                statusEl.textContent = `接続中 (参加者: ${connections.length}人)`;
+                statusEl.textContent = `接続中 (${connections.length + 1}人)`;
                 setupConnection(conn);
             }
         });
 
-        // --- 通信データの処理設定 ---
         function setupConnection(conn) {
-            if (!isHost) {
-                hostConnection = conn;
-            }
+            if (!isHost) hostConnection = conn;
 
             conn.on('open', () => {
                 if (!isHost) {
-                    statusEl.textContent = 'オンライン（ゲストとして接続完了）';
+                    statusEl.textContent = '接続完了（ゲスト）';
                     statusEl.className = 'connected';
                 }
             });
 
-            // メッセージ（描画データ）を受信したときの処理
             conn.on('data', (data) => {
-                if (data.type === 'draw') {
-                    // 受信した座標で線を描画
-                    drawOnCanvas(data.x1, data.y1, data.x2, data.y2, data.color, data.size);
-                    
-                    // ホストの場合は、他のすべてのゲストにこの描画データを転送（ブロードキャスト）
-                    if (isHost) {
-                        broadcast(data, conn.peer);
-                    }
-                } else if (data.type === 'clear') {
-                    localClear();
-                    if (isHost) {
-                        broadcast(data, conn.peer);
-                    }
-                }
+                handleNetworkData(data, conn.peer);
+                if (isHost) broadcast(data, conn.peer);
             });
 
             conn.on('close', () => {
                 if (isHost) {
                     connections = connections.filter(c => c.peer !== conn.peer);
-                    statusEl.textContent = connections.length > 0 ? `接続中 (参加者: ${connections.length}人)` : '待機中（ホスト）';
+                    removeRemotePlayer(conn.peer);
+                    statusEl.textContent = connections.length > 0 ? `接続中 (${connections.length + 1}人)` : '待機中（ホスト）';
                 } else {
-                    statusEl.textContent = 'ホストとの接続が切断されました';
+                    statusEl.textContent = '切断されました';
                     statusEl.className = '';
                 }
             });
         }
 
-        // 全員にデータを転送する関数（送信元を除く）
         function broadcast(data, excludePeerId) {
             connections.forEach(conn => {
-                if (conn.peer !== excludePeerId && conn.open) {
-                    conn.send(data);
-                }
+                if (conn.peer !== excludePeerId && conn.open) conn.send(data);
             });
         }
 
-        // --- 描画ロジック ---
-        function drawOnCanvas(x1, y1, x2, y2, color, size) {
-            ctx.beginPath();
-            ctx.strokeStyle = color;
-            ctx.lineWidth = size;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            ctx.stroke();
-            ctx.closePath();
-        }
-
-        // マウス/タッチ座標をCanvasの内部解像度に変換する関数
-        function getCanvasCoordinates(e) {
-            const rect = canvas.getBoundingClientRect();
-            // タッチイベントとマウスイベントの双方に対応
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            
-            return {
-                x: (clientX - rect.left) * (canvas.width / rect.width),
-                y: (clientY - rect.top) * (canvas.height / rect.height)
-            };
-        }
-
-        function startDrawing(e) {
-            isDrawing = true;
-            const coords = getCanvasCoordinates(e);
-            lastX = coords.x;
-            lastY = coords.y;
-        }
-
-        function draw(e) {
-            if (!isDrawing) return;
-            e.preventDefault(); // スクロール等の標準動作を防止
-
-            const coords = getCanvasCoordinates(e);
-            const currentX = coords.x;
-            const currentY = coords.y;
-            const color = colorPicker.value;
-            const size = sizeSlider.value;
-
-            // 1. ローカルのキャンバスに描画
-            drawOnCanvas(lastX, lastY, currentX, currentY, color, size);
-
-            // 2. ネットワーク上の相手にデータを送信
-            const drawData = {
-                type: 'draw',
-                x1: lastX,
-                y1: lastY,
-                x2: currentX,
-                y2: currentY,
-                color: color,
-                size: size
-            };
-
+        function sendNetworkData(data) {
             if (isHost) {
-                broadcast(drawData, null); // ゲスト全員に送信
+                broadcast(data, null);
             } else if (hostConnection && hostConnection.open) {
-                hostConnection.send(drawData); // ホストに送信
+                hostConnection.send(data);
             }
-
-            lastX = currentX;
-            lastY = currentY;
         }
 
-        function stopDrawing() {
-            isDrawing = false;
-        }
+        // --- 3Dゲームエンジン (Three.js) の初期化 ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.FogExp2(0x87ceeb, 0.015);
 
-        // イベントリスナーの登録（マウス）
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        window.addEventListener('mouseup', stopDrawing);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
 
-        // イベントリスナーの登録（スマホ・タブレット等のタッチ）
-        canvas.addEventListener('touchstart', startDrawing, { passive: false });
-        canvas.addEventListener('touchmove', draw, { passive: false });
-        window.addEventListener('touchend', stopDrawing);
+        // ライト設定
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+        scene.add(hemiLight);
 
-        // --- クリア（全消去）処理 ---
-        function localClear() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(20, 40, 20);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
 
-        clearBtn.addEventListener('click', () => {
-            localClear();
-            const clearData = { type: 'clear' };
+        // 地面
+        const floorGeo = new THREE.PlaneGeometry(200, 200);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x55aa55 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
 
-            if (isHost) {
-                broadcast(clearData, null);
-            } else if (hostConnection && hostConnection.open) {
-                hostConnection.send(clearData);
+        const grid = new THREE.GridHelper(200, 40, 0x000000, 0x444444);
+        grid.position.y = 0.01;
+        scene.add(grid);
+
+        // 管理オブジェクト
+        const remotePlayers = {};
+        const playerMeshes = [];
+        const buildObjects = [];
+
+        // プレイヤーパラメーター
+        let hp = 100;
+        const playerVelocity = new THREE.Vector3();
+        let canJump = false;
+        const moveState = { forward: false, backward: false, left: false, right: false };
+
+        let pitch = 0, yaw = 0;
+        const blocker = document.getElementById('blocker');
+
+        // スタート/再開処理
+        blocker.addEventListener('click', (e) => {
+            if (e.target.closest('#connection-panel')) return;
+            blocker.style.display = 'none';
+            if (!isTouchDevice) {
+                document.body.requestPointerLock();
             }
         });
 
-        // ユーティリティ: リンクコピー用
-        function copyLink() {
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === document.body) {
+                blocker.style.display = 'none';
+            } else if (!isTouchDevice) {
+                blocker.style.display = 'flex';
+            }
+        });
+
+        // PCマウス操作
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement !== document.body) return;
+            yaw -= e.movementX * 0.002;
+            pitch -= e.movementY * 0.002;
+            pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+        });
+
+        // PCキーボード操作
+        document.addEventListener('keydown', (e) => {
+            switch(e.code) {
+                case 'KeyW': moveState.forward = true; break;
+                case 'KeyS': moveState.backward = true; break;
+                case 'KeyA': moveState.left = true; break;
+                case 'KeyD': moveState.right = true; break;
+                case 'Space': if (canJump) { playerVelocity.y = 10; canJump = false; } break;
+                case 'KeyE': buildWall(); break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'KeyW': moveState.forward = false; break;
+                case 'KeyS': moveState.backward = false; break;
+                case 'KeyA': moveState.left = false; break;
+                case 'KeyD': moveState.right = false; break;
+            }
+        });
+
+        // PCマウスクリック射撃
+        document.addEventListener('mousedown', (e) => {
+            if (document.pointerLockElement === document.body && e.button === 0) {
+                shoot();
+            }
+        });
+
+        // --- スマホ・タッチ操作ロジック ---
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickKnob = document.getElementById('joystick-knob');
+        let joystickTouchId = null;
+        let joystickCenter = { x: 0, y: 0 };
+
+        joystickZone.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            joystickTouchId = touch.identifier;
+            const rect = joystickZone.getBoundingClientRect();
+            joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            updateJoystick(touch);
+        }, { passive: false });
+
+        joystickZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            for (let touch of e.changedTouches) {
+                if (touch.identifier === joystickTouchId) updateJoystick(touch);
+            }
+        }, { passive: false });
+
+        const resetJoystick = (e) => {
+            for (let touch of e.changedTouches) {
+                if (touch.identifier === joystickTouchId) {
+                    joystickTouchId = null;
+                    joystickKnob.style.transform = `translate(0px, 0px)`;
+                    moveState.forward = moveState.backward = moveState.left = moveState.right = false;
+                }
+            }
+        };
+        joystickZone.addEventListener('touchend', resetJoystick);
+        joystickZone.addEventListener('touchcancel', resetJoystick);
+
+        function updateJoystick(touch) {
+            const dx = touch.clientX - joystickCenter.x;
+            const dy = touch.clientY - joystickCenter.y;
+            const dist = Math.min(Math.hypot(dx, dy), 35);
+            const angle = Math.atan2(dy, dx);
+
+            const knobX = Math.cos(angle) * dist;
+            const knobY = Math.sin(angle) * dist;
+            joystickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+
+            moveState.forward = dy < -12;
+            moveState.backward = dy > 12;
+            moveState.left = dx < -12;
+            moveState.right = dx > 12;
+        }
+
+        // スマホ画面右側のスワイプ（視点変更）
+        const lookZone = document.getElementById('look-zone');
+        let lookTouchId = null;
+        let lastLookPos = { x: 0, y: 0 };
+
+        lookZone.addEventListener('touchstart', (e) => {
+            const touch = e.changedTouches[0];
+            if (e.target.classList.contains('touch-btn')) return;
+            lookTouchId = touch.identifier;
+            lastLookPos = { x: touch.clientX, y: touch.clientY };
+        }, { passive: true });
+
+        lookZone.addEventListener('touchmove', (e) => {
+            for (let touch of e.changedTouches) {
+                if (touch.identifier === lookTouchId) {
+                    const dx = touch.clientX - lastLookPos.x;
+                    const dy = touch.clientY - lastLookPos.y;
+                    yaw -= dx * 0.005;
+                    pitch -= dy * 0.005;
+                    pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+                    lastLookPos = { x: touch.clientX, y: touch.clientY };
+                }
+            }
+        }, { passive: true });
+
+        const resetLook = (e) => {
+            for (let touch of e.changedTouches) {
+                if (touch.identifier === lookTouchId) lookTouchId = null;
+            }
+        };
+        lookZone.addEventListener('touchend', resetLook);
+        lookZone.addEventListener('touchcancel', resetLook);
+
+        // スマホボタンイベント
+        document.getElementById('btn-shoot').addEventListener('touchstart', (e) => {
+            e.preventDefault(); e.stopPropagation(); shoot();
+        }, { passive: false });
+
+        document.getElementById('btn-build').addEventListener('touchstart', (e) => {
+            e.preventDefault(); e.stopPropagation(); buildWall();
+        }, { passive: false });
+
+        document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (canJump) { playerVelocity.y = 10; canJump = false; }
+        }, { passive: false });
+
+        document.getElementById('btn-menu').addEventListener('click', (e) => {
+            e.stopPropagation();
+            blocker.style.display = 'flex';
+        });
+
+        // --- リモートプレイヤー作成 ---
+        function createRemotePlayer(id) {
+            const group = new THREE.Group();
+            
+            const bodyGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.8, 16);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff3333 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.9;
+            body.castShadow = true;
+            group.add(body);
+
+            const headGeo = new THREE.SphereGeometry(0.4, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffaaaa });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 2.0;
+            group.add(head);
+
+            scene.add(group);
+            body.userData = { peerId: id };
+            playerMeshes.push(body);
+
+            remotePlayers[id] = { group: group, mesh: body };
+        }
+
+        function removeRemotePlayer(id) {
+            if (remotePlayers[id]) {
+                scene.remove(remotePlayers[id].group);
+                const index = playerMeshes.indexOf(remotePlayers[id].mesh);
+                if (index > -1) playerMeshes.splice(index, 1);
+                delete remotePlayers[id];
+            }
+        }
+
+        // --- 射撃 & 建築 ---
+        function shoot() {
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+            createTracer(camera.position, raycaster.ray.direction);
+
+            const intersects = raycaster.intersectObjects([...playerMeshes, ...buildObjects]);
+
+            if (intersects.length > 0) {
+                const hitObj = intersects[0].object;
+                if (hitObj.userData && hitObj.userData.peerId) {
+                    sendNetworkData({
+                        type: 'hit',
+                        targetId: hitObj.userData.peerId,
+                        damage: 25
+                    });
+                }
+            }
+
+            sendNetworkData({
+                type: 'shoot',
+                origin: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+                dir: { x: raycaster.ray.direction.x, y: raycaster.ray.direction.y, z: raycaster.ray.direction.z }
+            });
+        }
+
+        function createTracer(origin, direction) {
+            const material = new THREE.LineBasicMaterial({ color: 0xffff00 });
+            const points = [
+                origin.clone().add(new THREE.Vector3(0.2, -0.2, -0.5).applyQuaternion(camera.quaternion)),
+                origin.clone().add(direction.clone().multiplyScalar(50))
+            ];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            setTimeout(() => scene.remove(line), 50);
+        }
+
+        function buildWall() {
+            const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            dir.y = 0; dir.normalize();
+
+            const pos = camera.position.clone().add(dir.multiplyScalar(3));
+            pos.x = Math.round(pos.x / 2) * 2;
+            pos.z = Math.round(pos.z / 2) * 2;
+            pos.y = 1.5;
+
+            spawnWallMesh(pos.x, pos.y, pos.z, camera.rotation.y);
+
+            sendNetworkData({
+                type: 'build',
+                x: pos.x, y: pos.y, z: pos.z,
+                rotY: camera.rotation.y
+            });
+        }
+
+        function spawnWallMesh(x, y, z, rotY) {
+            const geo = new THREE.BoxGeometry(3, 3, 0.3);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+            const wall = new THREE.Mesh(geo, mat);
+            wall.position.set(x, y, z);
+            wall.rotation.y = rotY;
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            scene.add(wall);
+            buildObjects.push(wall);
+        }
+
+        // --- ネットワークデータ処理 ---
+        function handleNetworkData(data, senderId) {
+            if (data.type === 'transform') {
+                if (!remotePlayers[senderId]) createRemotePlayer(senderId);
+                const p = remotePlayers[senderId];
+                p.group.position.set(data.x, data.y - 0.9, data.z);
+                p.group.rotation.y = data.rotY;
+            } 
+            else if (data.type === 'shoot') {
+                createTracer(
+                    new THREE.Vector3(data.origin.x, data.origin.y, data.origin.z),
+                    new THREE.Vector3(data.dir.x, data.dir.y, data.dir.z)
+                );
+            } 
+            else if (data.type === 'build') {
+                spawnWallMesh(data.x, data.y, data.z, data.rotY);
+            } 
+            else if (data.type === 'hit') {
+                if (data.targetId === myPeerId) {
+                    takeDamage(data.damage);
+                }
+            }
+        }
+
+        function takeDamage(amount) {
+            hp = Math.max(0, hp - amount);
+            document.getElementById('hp-val').textContent = hp;
+            document.getElementById('hp-bar').style.width = hp + '%';
+
+            if (hp <= 0) {
+                alert('倒されました！リスポーンします。');
+                hp = 100;
+                document.getElementById('hp-val').textContent = hp;
+                document.getElementById('hp-bar').style.width = '100%';
+                camera.position.set(Math.random() * 10 - 5, 2, Math.random() * 10 - 5);
+            }
+        }
+
+        camera.position.set(0, 2, 5);
+
+        // --- メインループ ---
+        let clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            // プレイ中（ポーズ画面が非表示状態）の挙動
+            const isPlaying = (document.pointerLockElement === document.body) || (isTouchDevice && blocker.style.display === 'none');
+
+            if (isPlaying) {
+                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                euler.x = pitch;
+                euler.y = yaw;
+                camera.quaternion.setFromEuler(euler);
+
+                const moveVector = new THREE.Vector3();
+                if (moveState.forward) moveVector.z -= 1;
+                if (moveState.backward) moveVector.z += 1;
+                if (moveState.left) moveVector.x -= 1;
+                if (moveState.right) moveVector.x += 1;
+                moveVector.normalize();
+                moveVector.applyQuaternion(camera.quaternion);
+                moveVector.y = 0;
+
+                const speed = 8.0;
+                camera.position.addScaledVector(moveVector, speed * delta);
+
+                playerVelocity.y -= 25.0 * delta;
+                camera.position.y += playerVelocity.y * delta;
+
+                if (camera.position.y <= 2.0) {
+                    playerVelocity.y = 0;
+                    camera.position.y = 2.0;
+                    canJump = true;
+                }
+
+                sendNetworkData({
+                    type: 'transform',
+                    x: camera.position.x,
+                    y: camera.position.y,
+                    z: camera.position.z,
+                    rotY: yaw
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // リンクコピー機能
+        function copyLink(e) {
+            if (e) e.stopPropagation();
             shareUrlInput.select();
-            document.execCommand('copy');
-            alert('招待リンクをクリップボードにコピーしました！ゲストに共有してください。');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(shareUrlInput.value).then(() => {
+                    alert('招待リンクをコピーしました！ゲストに共有してください。');
+                });
+            } else {
+                document.execCommand('copy');
+                alert('招待リンクをコピーしました！ゲストに共有してください。');
+            }
         }
     </script>
 </body>
