@@ -1,258 +1,259 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FAKE Site Fullscreen - Custom Sidebar</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Number Guessing Game with Ranking</title>
+  <style>
+    :root {
+      --bg-color: #121214;
+      --card-bg: #1e1e24;
+      --accent-color: #00e676;
+      --text-color: #e0e0e0;
+      --border-color: #33333f;
+    }
 
-        html, body {
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
-            background-color: #FFEDB3;
-            display: flex;
-        }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
 
-        /* --- サイドバー (左側) --- */
-        .sidebar {
-            width: 280px;
-            height: 100vh;
-            background-color: #E8EEFA; /* ご指定の画像の青色を適用 */
-            border-right: 2px solid #111111;
-            padding: 24px 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            flex-shrink: 0;
-        }
+    .container {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      border: 1px solid var(--border-color);
+    }
 
-        /* プロフィール領域 */
-        .profile-container {
-            width: 100%;
-            aspect-ratio: 1 / 1;
-            border: 3px solid #111111;
-            background-color: #ffffff;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
+    h1, h2 {
+      text-align: center;
+      margin-top: 0;
+    }
 
-        .profile-avatar {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+    h1 { color: var(--accent-color); }
 
-        /* サイドバー内のUIアイテム */
-        .sidebar-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            height: 32px;
-        }
+    .game-box, .ranking-box {
+      margin-bottom: 24px;
+      background: rgba(0,0,0,0.2);
+      padding: 16px;
+      border-radius: 8px;
+    }
 
-        /* SVGアイコン共通 */
-        .icon-svg {
-            fill: #111111;
-            flex-shrink: 0;
-        }
+    input[type="number"], input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0 16px 0;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: #2a2a36;
+      color: #fff;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
 
-        .dots {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      background: var(--accent-color);
+      color: #000;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
 
-        .dot {
-            width: 10px;
-            height: 10px;
-            background-color: #111111;
-            border-radius: 50%;
-        }
+    button:hover { opacity: 0.9; }
+    button:disabled { background: #555; cursor: not-allowed; }
 
-        .pill {
-            height: 12px;
-            background-color: #111111;
-            border-radius: 6px;
-        }
+    #message {
+      text-align: center;
+      font-weight: bold;
+      min-height: 1.5em;
+      margin: 10px 0;
+    }
 
-        .divider {
-            width: 100%;
-            height: 2px;
-            background-color: #111111;
-            margin: 6px 0;
-            opacity: 0.5;
-        }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
 
-        /* --- メインコンテンツエリア (右側全画面) --- */
-        .main-content {
-            flex: 1;
-            height: 100vh;
-            background-color: #ffffff;
-            background-size: 24px 24px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-        }
+    th, td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
 
-        /* 爆発型スターバーストバナー */
-        .starburst-container {
-            width: 82vw;
-            max-width: 1100px;
-            height: 75vh;
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+    th { color: var(--accent-color); }
 
-        .starburst-svg {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            filter: drop-shadow(4px 6px 0px rgba(0,0,0,0.15));
-        }
-
-        /* メインの FAKE テキスト */
-        .fake-text {
-            position: relative;
-            z-index: 10;
-            font-family: "Arial Black", "Impact", sans-serif;
-            font-size: clamp(8rem, 18vw, 22rem);
-            font-weight: 900;
-            color: #FF002B;
-            letter-spacing: -0.02em;
-            line-height: 1;
-            text-align: center;
-            user-select: none;
-        }
-
-        .tool-shape {
-            background-color: #111111;
-        }
-
-        .tool-circle {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-        }
-
-        .tool-wave {
-            width: 32px;
-            height: 6px;
-            border-radius: 3px;
-        }
-
-        .tool-rect1 {
-            width: 36px;
-            height: 16px;
-            border-radius: 2px;
-        }
-
-        .tool-rect2 {
-            width: 42px;
-            height: 16px;
-            border-radius: 2px;
-        }
-    </style>
+    .hidden { display: none; }
+  </style>
 </head>
 <body>
 
-    <!-- サイドバー -->
-    <aside class="sidebar">
-        <!-- アバター写真 -->
-        <div class="profile-container">
-            <svg class="profile-avatar" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="100" height="100" fill="#B3EFFF"/>
-                <circle cx="50" cy="38" r="18" fill="#0099FF"/>
-                <path d="M20 88C20 68 33 60 50 60C67 60 80 68 80 88V100H20V88Z" fill="#0033CC"/>
-            </svg>
-        </div>
+<div class="container">
+  <h1>1-100 数字当てゲーム</h1>
 
-        <!-- メール & チャット風アイコン列 1 -->
-        <div class="sidebar-item">
-            <svg class="icon-svg" width="22" height="18" viewBox="0 0 24 18"><path d="M20 0H4C1.8 0 0 1.8 0 4V14C0 16.2 1.8 18 4 18H20C22.2 18 24 16.2 24 14V4C24 1.8 22.2 0 20 0ZM20 4L12 9L4 4H20Z"/></svg>
-            <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24"><path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z"/></svg>
-            <div class="dot"></div>
-        </div>
+  <div class="game-box">
+    <p>1から100までの数字を当ててください。<br>少ない試行回数（スコア）でクリアを目指そう！</p>
+    
+    <div id="play-area">
+      <input type="number" id="guess-input" min="1" max="100" placeholder="数字を入力...">
+      <button id="guess-btn" onclick="makeGuess()">推測する</button>
+    </div>
 
-        <!-- アイコン列 2 -->
-        <div class="sidebar-item">
-            <div class="dot" style="width:16px; height:16px;"></div>
-            <svg class="icon-svg" width="22" height="18" viewBox="0 0 24 24"><path d="M16 11C17.66 11 18.99 9.66 18.99 8C18.99 6.34 17.66 5 16 5C14.34 5 13 6.34 13 8C13 9.66 14.34 11 16 11ZM8 11C9.66 11 10.99 9.66 10.99 8C10.99 6.34 9.66 5 8 5C6.34 5 5 6.34 5 8C5 9.66 6.34 11 8 11ZM8 13C5.67 13 1 14.17 1 16.5V19H15V16.5C15 14.17 10.33 13 8 13ZM16 13C15.71 13 15.38 13.02 15.03 13.05 C16.19 13.89 17 15.02 17 16.5V19H23V16.5C23 14.17 18.33 13 16 13Z"/></svg>
-            <div class="dot" style="width:14px; height:14px;"></div>
-        </div>
+    <div id="result-area" class="hidden">
+      <p>クリア！ 試行回数: <span id="final-score"></span>回</p>
+      <input type="text" id="player-name" maxlength="10" placeholder="名前を入力 (最大10文字)">
+      <button id="submit-btn" onclick="submitScore()">スコアを送信</button>
+      <button onclick="resetGame()" style="margin-top: 8px; background: #666; color: #fff;">もう一度遊ぶ</button>
+    </div>
 
-        <!-- アイコン列 3 -->
-        <div class="sidebar-item">
-            <svg class="icon-svg" width="22" height="18" viewBox="0 0 24 18"><path d="M20 0H4C1.8 0 0 1.8 0 4V14C0 16.2 1.8 18 4 18H20C22.2 18 24 16.2 24 14V4C24 1.8 22.2 0 20 0ZM20 4L12 9L4 4H20Z"/></svg>
-            <div class="dots">
-                <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
-            </div>
-        </div>
+    <div id="message"></div>
+  </div>
 
-        <div class="divider"></div>
+  <div class="ranking-box">
+    <h2>🏆 オンラインランキング TOP 10</h2>
+    <table id="ranking-table">
+      <thead>
+        <tr>
+          <th>順位</th>
+          <th>名前</th>
+          <th>回数</th>
+        </tr>
+      </thead>
+      <tbody id="ranking-body">
+        <tr><td colspan="3" style="text-align:center;">読み込み中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 
-        <!-- アイコン列 4 -->
-        <div class="sidebar-item">
-            <svg class="icon-svg" width="22" height="18" viewBox="0 0 24 18"><path d="M20 0H4C1.8 0 0 1.8 0 4V14C0 16.2 1.8 18 4 18H20C22.2 18 24 16.2 24 14V4C24 1.8 22.2 0 20 0ZM20 4L12 9L4 4H20Z"/></svg>
-            <div class="dots">
-                <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
-            </div>
-        </div>
+<script>
+  // ★ ここにGASのウェブアプリURLを貼り付けます
+  const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwFhN5ENO7_Ba9A45QNO710Bx18SMsi-HDhEwQtrAr66-u0MANW3XhgW1-hnl_uSycp/exec";
 
-        <!-- アイコン列 5 -->
-        <div class="sidebar-item">
-            <div class="dot"></div>
-            <div class="pill" style="width: 100px;"></div>
-            <div class="dot"></div>
-        </div>
+  let targetNumber;
+  let attempts = 0;
+  let isGameOver = false;
 
-        <!-- アイコン列 6 -->
-        <div class="sidebar-item">
-            <div class="dot"></div>
-            <div class="dot"></div>
-            <div class="dot"></div>
-        </div>
+  function initGame() {
+    targetNumber = Math.floor(Math.random() * 100) + 1;
+    attempts = 0;
+    isGameOver = false;
+    document.getElementById("guess-input").value = "";
+    document.getElementById("message").textContent = "ゲームスタート！";
+    document.getElementById("play-area").classList.remove("hidden");
+    document.getElementById("result-area").classList.add("hidden");
+    document.getElementById("guess-btn").disabled = false;
+  }
 
-        <!-- アイコン列 7 -->
-        <div class="sidebar-item">
-            <div class="pill" style="width: 80px;"></div>
-            <div class="dot"></div>
-            <div class="dot"></div>
-        </div>
+  function makeGuess() {
+    if (isGameOver) return;
 
-        <!-- アイコン列 8 -->
-        <div class="sidebar-item">
-            <div class="dot"></div>
-            <div class="dot"></div>
-        </div>
-    </aside>
+    const input = document.getElementById("guess-input");
+    const guess = parseInt(input.value);
 
-    <!-- メイン領域 -->
-    <main class="main-content">
-        <div class="starburst-container">
-            <svg class="starburst-svg" viewBox="0 0 600 420" preserveAspectRatio="none">
-                <polygon points="
-                    300,5  345,70  410,20  425,95  500,60  485,140 575,135 525,200 
-                    590,265 505,285 530,365 445,340 430,415 355,360 300,415 245,360 
-                    170,415 155,340 70,365 95,285 10,265 75,200 25,135 115,140 
-                    100,60 175,95 190,20 255,70
-                " fill="#FFF200" stroke="#FFF200" stroke-width="2" />
-            </svg>
+    if (isNaN(guess) || guess < 1 || guess > 100) {
+      document.getElementById("message").textContent = "1〜100の有効な数字を入力してください。";
+      return;
+    }
 
-            <!-- 主張の強い FAKE テキスト -->
-            <h1 class="fake-text">FAKE</h1>
-        </div>
-    </main>
+    attempts++;
+
+    if (guess === targetNumber) {
+      isGameOver = true;
+      document.getElementById("message").textContent = "🎉 正解です！";
+      document.getElementById("final-score").textContent = attempts;
+      document.getElementById("play-area").classList.add("hidden");
+      document.getElementById("result-area").classList.remove("hidden");
+    } else if (guess < targetNumber) {
+      document.getElementById("message").textContent = "📈 もっと大きいです！";
+    } else {
+      document.getElementById("message").textContent = "📉 もっと小さかった！";
+    }
+    input.value = "";
+  }
+
+  async function submitScore() {
+    const nameInput = document.getElementById("player-name");
+    const name = nameInput.value.trim() || "Anonymous";
+    const submitBtn = document.getElementById("submit-btn");
+
+    submitBtn.disabled = true;
+    document.getElementById("message").textContent = "スコア送信中...";
+
+    try {
+      // GAS側でCORS回避のため text/plain で送るテクニックを使用
+      await fetch(GAS_WEB_APP_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ name: name, score: attempts })
+      });
+
+      document.getElementById("message").textContent = "送信完了！";
+      nameInput.value = "";
+      setTimeout(fetchRanking, 1000); // ランキング再取得
+    } catch (err) {
+      document.getElementById("message").textContent = "送信に失敗しました。";
+      submitBtn.disabled = false;
+    }
+  }
+
+  async function fetchRanking() {
+    const tbody = document.getElementById("ranking-body");
+    try {
+      const res = await fetch(GAS_WEB_APP_URL);
+      const data = await res.json();
+
+      tbody.innerHTML = "";
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">データがありません</td></tr>';
+        return;
+      }
+
+      data.forEach((item, index) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${item.score}回</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">ランキング取得失敗</td></tr>';
+    }
+  }
+
+  function resetGame() {
+    initGame();
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function(m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+
+  // 初開時にゲーム初期化とランキング取得
+  initGame();
+  fetchRanking();
+</script>
+
 </body>
 </html>
