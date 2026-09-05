@@ -3,578 +3,166 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>P2P オンラインお絵描き (Undo & 保存機能付き)</title>
-  <!-- PeerJS (P2P通信用ライブラリ) -->
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <title>詐欺電話撃退ジェネレーター</title>
   <style>
-    :root {
-      --bg-color: #0f172a;
-      --card-bg: #1e293b;
-      --accent-color: #3b82f6;
-      --text-color: #f8fafc;
-      --border-color: #334155;
-    }
-    * {
+    *, *::before, *::after {
       box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
+      background-color: #0b0c10;
+      color: #c5c6c7;
+      font-family: 'Courier New', Courier, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 1rem;
+      margin: 0;
+      padding: 20px;
     }
-    header {
+    .container {
+      background: #1f2833;
+      border: 1px solid #45a29e;
+      border-radius: 8px;
+      padding: 30px;
+      max-width: 480px;
       width: 100%;
-      max-width: 960px;
-      margin-bottom: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      background: var(--card-bg);
-      padding: 1rem;
-      border-radius: 12px;
-      border: 1px solid var(--border-color);
-    }
-    .header-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+      text-align: center;
     }
     h1 {
-      font-size: 1.25rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
+      color: #66fcf1;
+      font-size: 1.4rem;
+      margin-top: 0;
+      margin-bottom: 20px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      border-bottom: 1px solid #45a29e;
+      padding-bottom: 10px;
     }
-    .status-container {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .status-badge {
+    p {
       font-size: 0.85rem;
-      padding: 0.25rem 0.75rem;
-      border-radius: 9999px;
-      background: #334155;
+      color: #c5c6c7;
+      line-height: 1.5;
+      margin-bottom: 25px;
+    }
+    button {
+      background: #0b0c10;
+      color: #66fcf1;
+      border: 1px solid #66fcf1;
+      padding: 16px 20px;
+      font-size: 1rem;
+      font-family: inherit;
       font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      width: 100%;
     }
-    .status-badge.host { background: #059669; }
-    .status-badge.guest { background: #2563eb; }
-    .user-count {
-      font-size: 0.85rem;
-      color: #94a3b8;
+    button:hover {
+      background: #66fcf1;
+      color: #0b0c10;
     }
-
-    .link-box {
-      display: flex;
-      gap: 0.5rem;
-    }
-    .link-box input {
-      flex: 1;
-      padding: 0.5rem 0.75rem;
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-      background: #0f172a;
+    button.active {
+      background: #c53030;
+      border-color: #fc8181;
       color: #fff;
+      box-shadow: 0 0 12px rgba(252, 129, 129, 0.6);
+    }
+    .status {
+      margin-top: 20px;
       font-size: 0.85rem;
-    }
-    .btn {
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      border: none;
-      background: var(--accent-color);
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      transition: opacity 0.2s, background-color 0.2s;
-      white-space: nowrap;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-      font-size: 0.85rem;
-    }
-    .btn:hover:not(:disabled) { opacity: 0.9; }
-    .btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-    .btn-secondary { background: #475569; }
-    .btn-secondary.active { background: #38bdf8; color: #0f172a; }
-    .btn-success { background: #10b981; }
-    .btn-danger { background: #dc2626; }
-
-    main {
-      width: 100%;
-      max-width: 960px;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .toolbar {
-      background: var(--card-bg);
-      padding: 0.75rem 1rem;
-      border-radius: 12px;
-      border: 1px solid var(--border-color);
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.75rem;
-    }
-
-    .tool-group {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .color-swatches {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-    .color-swatch {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      cursor: pointer;
-      border: 2px solid transparent;
-      transition: transform 0.1s;
-    }
-    .color-swatch:hover { transform: scale(1.1); }
-    .color-swatch.active { border-color: #ffffff; transform: scale(1.15); }
-
-    input[type="color"] {
-      -webkit-appearance: none;
-      border: none;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      cursor: pointer;
-      background: transparent;
-    }
-    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-    input[type="color"]::-webkit-color-swatch { border: 2px solid #ffffff; border-radius: 50%; }
-
-    .size-picker {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.85rem;
-    }
-    .size-picker input { cursor: pointer; }
-
-    .canvas-container {
-      width: 100%;
-      background: #ffffff;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-      touch-action: none;
-      aspect-ratio: 4 / 3;
-    }
-
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      cursor: crosshair;
+      color: #45a29e;
+      min-height: 1.5em;
     }
   </style>
 </head>
 <body>
 
-  <header>
-    <div class="header-top">
-      <h1>🎨 P2P オンラインお絵描き</h1>
-      <div class="status-container">
-        <span id="statusBadge" class="status-badge">初期化中...</span>
-        <span id="userCount" class="user-count">👥 1人</span>
-      </div>
-    </div>
-    <div class="link-box">
-      <input type="text" id="shareUrl" readonly placeholder="招待リンク生成中..." />
-      <button id="copyBtn" class="btn">リンクをコピー</button>
-    </div>
-  </header>
+  <div class="container">
+    <h1>撃退オーディオ</h1>
+    <p>ボタンを押すと、ヒンディー語風の不気味な唱え声がランダムな組み合わせと間隔で再生され続けます。</p>
+    
+    <button id="togglePlayBtn">音声再生を開始</button>
 
-  <main>
-    <div class="toolbar">
-      <!-- パレット -->
-      <div class="tool-group">
-        <div class="color-swatches" id="colorSwatches">
-          <div class="color-swatch active" style="background: #000000" data-color="#000000"></div>
-          <div class="color-swatch" style="background: #ef4444" data-color="#ef4444"></div>
-          <div class="color-swatch" style="background: #22c55e" data-color="#22c55e"></div>
-          <div class="color-swatch" style="background: #3b82f6" data-color="#3b82f6"></div>
-          <div class="color-swatch" style="background: #eab308" data-color="#eab308"></div>
-          <div class="color-swatch" style="background: #a855f7" data-color="#a855f7"></div>
-        </div>
-        <input type="color" id="customColor" value="#000000" title="カスタムカラー" />
-      </div>
-
-      <!-- 太さ調整 -->
-      <div class="tool-group">
-        <div class="size-picker">
-          <span>太さ:</span>
-          <input type="range" id="brushSize" min="2" max="40" value="6" />
-          <span id="sizeVal">6px</span>
-        </div>
-        <button id="eraserBtn" class="btn btn-secondary">🧹 消しゴム</button>
-      </div>
-
-      <!-- 編集・機能アクション -->
-      <div class="tool-group">
-        <button id="undoBtn" class="btn btn-secondary" disabled>↩ 1つ戻す</button>
-        <button id="clearBtn" class="btn btn-danger">🗑️ 全消去</button>
-        <button id="saveBtn" class="btn btn-success">💾 PNG保存</button>
-      </div>
-    </div>
-
-    <div class="canvas-container">
-      <canvas id="canvas" width="1200" height="900"></canvas>
-    </div>
-  </main>
+    <div class="status" id="statusText">待機中</div>
+  </div>
 
   <script>
-    // --- 要素取得 ---
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const statusBadge = document.getElementById('statusBadge');
-    const userCount = document.getElementById('userCount');
-    const shareUrlInput = document.getElementById('shareUrl');
-    const copyBtn = document.getElementById('copyBtn');
-    const brushSizeInput = document.getElementById('brushSize');
-    const sizeVal = document.getElementById('sizeVal');
-    const eraserBtn = document.getElementById('eraserBtn');
-    const undoBtn = document.getElementById('undoBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const colorSwatches = document.getElementById('colorSwatches');
-    const customColorInput = document.getElementById('customColor');
+    const synth = window.speechSynthesis;
+    const togglePlayBtn = document.getElementById('togglePlayBtn');
+    const statusText = document.getElementById('statusText');
 
-    // --- キャンバス初期化 ---
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let isPlaying = false;
+    let timerId = null;
 
-    // --- 状態変数 ---
-    let isHost = false;
-    let peer = null;
-    let hostConn = null;
-    let connections = []; // ホスト側で保持するゲスト接続リスト
-    let isDrawing = false;
-    let lastX = 0;
-    let lastY = 0;
-    let currentColor = '#000000';
-    let currentSize = 6;
-    let isEraser = false;
+    const syllables = [
+      "アタル ヴァカル ナマハ",
+      "ブラマ カパラ ダーラナ",
+      "サンハラ ヴァジュラ スートラ",
+      "タパ スヴァーハー ラーフ",
+      "ケーテュ ダーラ チャクラ",
+      "マントラ ヤーナ アグニ",
+      "ヴィシュヌ ターラ シャクティ",
+      "カーラ タイム ケーララ",
+      "ドゥルガ バフラ プリヤ",
+      "オーム ナモー ヴァルナ"
+    ];
 
-    // 履歴管理 (Undo用)
-    const historyStack = [];
-    const MAX_HISTORY = 20;
-
-    function saveHistoryState() {
-      if (historyStack.length >= MAX_HISTORY) {
-        historyStack.shift();
+    function generatePseudoHindi() {
+      const count = Math.floor(Math.random() * 3) + 2;
+      let result = [];
+      for (let i = 0; i < count; i++) {
+        const randomIndex = Math.floor(Math.random() * syllables.length);
+        result.push(syllables[randomIndex]);
       }
-      historyStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      updateUndoButtonState();
+      return result.join(" ... ");
     }
 
-    function updateUndoButtonState() {
-      undoBtn.disabled = historyStack.length === 0;
-    }
+    function speakNext() {
+      if (!isPlaying) return;
 
-    // --- PeerJS P2P 接続処理 ---
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetHostId = urlParams.get('room');
+      const text = generatePseudoHindi();
+      const utterance = new SpeechSynthesisUtterance(text);
 
-    if (targetHostId) {
-      isHost = false;
-      statusBadge.textContent = '👤 ゲスト (接続中...)';
-      statusBadge.classList.add('guest');
-      initGuest(targetHostId);
-    } else {
-      isHost = true;
-      statusBadge.textContent = '👑 ホスト (部屋作成中...)';
-      statusBadge.classList.add('host');
-      initHost();
-    }
+      utterance.lang = 'hi-IN';
+      utterance.pitch = 0.45 + Math.random() * 0.25;
+      utterance.rate = 0.65 + Math.random() * 0.2;
 
-    // ホストの初期化
-    function initHost() {
-      peer = new Peer();
-      peer.on('open', (id) => {
-        const shareUrl = `${window.location.origin}${window.location.pathname}?room=${id}`;
-        shareUrlInput.value = shareUrl;
-        statusBadge.textContent = '👑 ホスト (待機中)';
-      });
+      utterance.onstart = () => {
+        if (isPlaying) statusText.textContent = "発唱中...";
+      };
 
-      peer.on('connection', (conn) => {
-        connections.push(conn);
-        updateUserCount();
+      utterance.onend = () => {
+        if (!isPlaying) return;
+        statusText.textContent = "待機中（不気味な間）...";
+        const delay = Math.floor(Math.random() * 2500) + 1000;
+        timerId = setTimeout(speakNext, delay);
+      };
 
-        conn.on('open', () => {
-          // 新規ゲストに現在のキャンバス状態を送信
-          conn.send({ type: 'sync_canvas', dataUrl: canvas.toDataURL() });
-        });
-
-        conn.on('data', (data) => {
-          handleIncomingData(data, conn);
-        });
-
-        conn.on('close', () => {
-          connections = connections.filter(c => c !== conn);
-          updateUserCount();
-        });
-      });
-    }
-
-    // ゲストの初期化
-    function initGuest(hostId) {
-      peer = new Peer();
-      peer.on('open', () => {
-        hostConn = peer.connect(hostId);
-
-        hostConn.on('open', () => {
-          statusBadge.textContent = '👤 ゲスト (接続完了)';
-          userCount.textContent = '👥 接続中';
-        });
-
-        hostConn.on('data', (data) => {
-          handleIncomingData(data, hostConn);
-        });
-
-        hostConn.on('close', () => {
-          statusBadge.textContent = '❌ ホストから切断されました';
-        });
-      });
-
-      peer.on('error', (err) => {
-        console.error(err);
-        statusBadge.textContent = '⚠️ 接続エラー';
-      });
-    }
-
-    // ホストから全ゲストへデータ放送
-    function broadcast(data, excludeConn = null) {
-      connections.forEach(c => {
-        if (c !== excludeConn && c.open) {
-          c.send(data);
+      utterance.onerror = () => {
+        if (isPlaying) {
+          timerId = setTimeout(speakNext, 2000);
         }
-      });
-    }
-
-    // 接続人数の更新 (ホスト専用)
-    function updateUserCount() {
-      if (isHost) {
-        userCount.textContent = `👥 ${connections.length + 1}人`;
-      }
-    }
-
-    // 受信データの処理
-    function handleIncomingData(data, senderConn) {
-      if (data.type === 'draw') {
-        drawSegment(
-          data.x0 * canvas.width,
-          data.y0 * canvas.height,
-          data.x1 * canvas.width,
-          data.y1 * canvas.height,
-          data.color,
-          data.size,
-          data.isEraser
-        );
-        if (isHost) broadcast(data, senderConn);
-      } else if (data.type === 'clear') {
-        saveHistoryState();
-        clearLocalCanvas();
-        if (isHost) broadcast(data, senderConn);
-      } else if (data.type === 'sync_canvas') {
-        saveHistoryState();
-        loadCanvasFromDataUrl(data.dataUrl);
-        if (isHost) broadcast(data, senderConn);
-      }
-    }
-
-    function loadCanvasFromDataUrl(dataUrl) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-      };
-      img.src = dataUrl;
-    }
-
-    // --- 描画処理 ---
-    function getCanvasCoords(e) {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY
-      };
-    }
-
-    function drawSegment(x0, y0, x1, y1, color, size, eraser) {
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.strokeStyle = eraser ? '#ffffff' : color;
-      ctx.lineWidth = size;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-    }
-
-    function clearLocalCanvas() {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    function sendDrawData(x0, y0, x1, y1) {
-      const data = {
-        type: 'draw',
-        x0: x0 / canvas.width,
-        y0: y0 / canvas.height,
-        x1: x1 / canvas.width,
-        y1: y1 / canvas.height,
-        color: currentColor,
-        size: currentSize,
-        isEraser: isEraser
       };
 
-      if (isHost) {
-        broadcast(data);
-      } else if (hostConn && hostConn.open) {
-        hostConn.send(data);
-      }
+      synth.speak(utterance);
     }
 
-    function sendClearData() {
-      const data = { type: 'clear' };
-      if (isHost) {
-        broadcast(data);
-      } else if (hostConn && hostConn.open) {
-        hostConn.send(data);
+    togglePlayBtn.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+
+      if (isPlaying) {
+        togglePlayBtn.textContent = "音声再生を停止";
+        togglePlayBtn.classList.add('active');
+        speakNext();
+      } else {
+        togglePlayBtn.textContent = "音声再生を開始";
+        togglePlayBtn.classList.remove('active');
+        statusText.textContent = "停止しました";
+        if (timerId) clearTimeout(timerId);
+        synth.cancel();
       }
-    }
-
-    function sendSyncCanvasData() {
-      const data = {
-        type: 'sync_canvas',
-        dataUrl: canvas.toDataURL()
-      };
-      if (isHost) {
-        broadcast(data);
-      } else if (hostConn && hostConn.open) {
-        hostConn.send(data);
-      }
-    }
-
-    // --- イベントリスナー (Pointer Events) ---
-    canvas.addEventListener('pointerdown', (e) => {
-      saveHistoryState(); // ストローク開始時に現在の状態を履歴保存
-      isDrawing = true;
-      canvas.setPointerCapture(e.pointerId);
-      const coords = getCanvasCoords(e);
-      lastX = coords.x;
-      lastY = coords.y;
-
-      drawSegment(lastX, lastY, lastX, lastY, currentColor, currentSize, isEraser);
-      sendDrawData(lastX, lastY, lastX, lastY);
-    });
-
-    canvas.addEventListener('pointermove', (e) => {
-      if (!isDrawing) return;
-      const coords = getCanvasCoords(e);
-      drawSegment(lastX, lastY, coords.x, coords.y, currentColor, currentSize, isEraser);
-      sendDrawData(lastX, lastY, coords.x, coords.y);
-      lastX = coords.x;
-      lastY = coords.y;
-    });
-
-    const stopDrawing = (e) => {
-      if (isDrawing) {
-        isDrawing = false;
-        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
-      }
-    };
-
-    canvas.addEventListener('pointerup', stopDrawing);
-    canvas.addEventListener('pointercancel', stopDrawing);
-
-    // --- UI コントロール ---
-    colorSwatches.addEventListener('click', (e) => {
-      const swatch = e.target.closest('.color-swatch');
-      if (!swatch) return;
-      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-      swatch.classList.add('active');
-      currentColor = swatch.dataset.color;
-      isEraser = false;
-      eraserBtn.classList.remove('active');
-    });
-
-    customColorInput.addEventListener('input', (e) => {
-      currentColor = e.target.value;
-      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-      isEraser = false;
-      eraserBtn.classList.remove('active');
-    });
-
-    brushSizeInput.addEventListener('input', (e) => {
-      currentSize = e.target.value;
-      sizeVal.textContent = `${currentSize}px`;
-    });
-
-    eraserBtn.addEventListener('click', () => {
-      isEraser = !isEraser;
-      eraserBtn.classList.toggle('active', isEraser);
-    });
-
-    // Undo (1つ戻す)
-    undoBtn.addEventListener('click', () => {
-      if (historyStack.length === 0) return;
-      const previousState = historyStack.pop();
-      ctx.putImageData(previousState, 0, 0);
-      updateUndoButtonState();
-      sendSyncCanvasData(); // 変更後のキャンバスを通信相手全員に同期
-    });
-
-    // 全消去
-    clearBtn.addEventListener('click', () => {
-      if (confirm('キャンバス全体をクリアしますか？')) {
-        saveHistoryState();
-        clearLocalCanvas();
-        sendClearData();
-      }
-    });
-
-    // PNG画像として保存
-    saveBtn.addEventListener('click', () => {
-      const link = document.createElement('a');
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      link.download = `drawing_${timestamp}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    });
-
-    copyBtn.addEventListener('click', () => {
-      if (!shareUrlInput.value) return;
-      navigator.clipboard.writeText(shareUrlInput.value).then(() => {
-        const originalText = copyBtn.textContent;
-        copyBtn.textContent = 'コピー完了！';
-        setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
-      });
     });
   </script>
 </body>
